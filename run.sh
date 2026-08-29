@@ -5,19 +5,24 @@ cd /home/container
 if [ ! -f "./tmr-bot" ]; then
     echo "Binary not found. Compiling..."
 
-    if ! command -v go &> /dev/null; then
+    if [ ! -d "./go" ]; then
         echo "Installing Go..."
-        wget -q https://go.dev/dl/go1.23.6.linux-amd64.tar.gz -O /tmp/go.tar.gz
-        tar -C /usr/local -xzf /tmp/go.tar.gz
-        export PATH=$PATH:/usr/local/go/bin
-        rm /tmp/go.tar.gz
+        mkdir -p /home/container/go-install
+        wget -q https://go.dev/dl/go1.23.6.linux-amd64.tar.gz -O /home/container/go-install/go.tar.gz
+        tar -C /home/container/go-install -xzf /home/container/go-install/go.tar.gz
+        export GOROOT=/home/container/go-install/go
+        export PATH=$PATH:/home/container/go-install/go/bin
+    else
+        export GOROOT=/home/container/go/bin/go
+        export PATH=$PATH:/home/container/go/bin
     fi
 
-    CGO_ENABLED=0 /usr/local/go/bin/go build -o tmr-bot .
+    CGO_ENABLED=0 go build -o tmr-bot .
     if [ $? -ne 0 ]; then
         echo "Build failed!"
         exit 1
     fi
+    rm -rf /home/container/go-install
     echo "Build successful!"
 fi
 
