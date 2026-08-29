@@ -39,12 +39,21 @@ func NewKonachanClient(tags, rating string, minScore int) *KonachanClient {
 }
 
 func (c *KonachanClient) buildTags() string {
-	tags := c.Tags
+	tags := ""
+	if c.Tags != "" {
+		tags = c.Tags
+	}
 	if c.Rating != "" {
-		tags += " rating:" + c.Rating
+		if tags != "" {
+			tags += "+"
+		}
+		tags += "rating:" + c.Rating
 	}
 	if c.MinScore > 0 {
-		tags += fmt.Sprintf(" score:>%d", c.MinScore)
+		if tags != "" {
+			tags += "+"
+		}
+		tags += fmt.Sprintf("score:>%d", c.MinScore)
 	}
 	return tags
 }
@@ -52,12 +61,12 @@ func (c *KonachanClient) buildTags() string {
 func (c *KonachanClient) GetRandomImage() (*KonachanPost, error) {
 	tags := c.buildTags()
 
-	url := fmt.Sprintf(
-		"https://konachan.net/post.json?limit=50&tags=%s",
-		url.QueryEscape(tags),
-	)
+	apiURL := "https://konachan.net/post.json?limit=50"
+	if tags != "" {
+		apiURL += "&tags=" + url.QueryEscape(tags)
+	}
 
-	resp, err := c.HTTPClient.Get(url)
+	resp, err := c.HTTPClient.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from konachan: %w", err)
 	}
@@ -83,13 +92,12 @@ func (c *KonachanClient) GetRandomImage() (*KonachanPost, error) {
 func (c *KonachanClient) GetRandomImages(count int) ([]KonachanPost, error) {
 	tags := c.buildTags()
 
-	url := fmt.Sprintf(
-		"https://konachan.net/post.json?limit=%d&tags=%s",
-		count,
-		url.QueryEscape(tags),
-	)
+	apiURL := fmt.Sprintf("https://konachan.net/post.json?limit=%d", count)
+	if tags != "" {
+		apiURL += "&tags=" + url.QueryEscape(tags)
+	}
 
-	resp, err := c.HTTPClient.Get(url)
+	resp, err := c.HTTPClient.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from konachan: %w", err)
 	}
