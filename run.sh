@@ -10,7 +10,8 @@ if [ ! -d ".git" ]; then
     rm -rf /tmp/repo
 else
     echo "Pulling latest changes..."
-    git pull
+    git fetch --all
+    git reset --hard origin/main
 fi
 
 if [ -f "./tmr-bot" ]; then
