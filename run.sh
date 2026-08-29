@@ -2,15 +2,23 @@
 
 cd /home/container
 
-if [ ! -f "./tmr-bot" ]; then
-    echo "Binary not found. Cloning from git..."
+if [ ! -d ".git" ]; then
+    echo "Cloning from git..."
+    git clone https://github.com/sang765/TMR-Discord-Bot.git /tmp/repo
+    cp -r /tmp/repo/* /home/container/
+    cp -r /tmp/repo/.* /home/container/ 2>/dev/null
+    rm -rf /tmp/repo
+else
+    echo "Pulling latest changes..."
+    git pull
+fi
 
-    if [ ! -d ".git" ]; then
-        git clone https://github.com/sang765/TMR-Discord-Bot.git /tmp/repo
-        cp -r /tmp/repo/* /home/container/
-        cp -r /tmp/repo/.* /home/container/ 2>/dev/null
-        rm -rf /tmp/repo
-    fi
+if [ -f "./tmr-bot" ]; then
+    rm -f ./tmr-bot
+fi
+
+if [ ! -f "./tmr-bot" ]; then
+    echo "Compiling..."
 
     export GOROOT=/home/container/go
     export GOPATH=/home/container/gopath
