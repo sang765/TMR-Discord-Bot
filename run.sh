@@ -1,6 +1,7 @@
 #!/bin/bash
 
 chmod +x /home/container/tmr-bot
+chmod +x /home/container/run.sh
 
 cd /home/container
 
