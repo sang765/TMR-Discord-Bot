@@ -17,10 +17,10 @@ auto:
 # Konachan API Settings (konachan.net)
 konachan:
   # Tags for filtering (space separated)
-  # Examples: "1girl landscape score:>50"
-  icon_tags: "1girl"
+  # Examples: "landscape score:>50"
+  icon_tags: "long_hair"
   banner_tags: "landscape"
   # Rating: s (safe), q (questionable), e (explicit)
   rating: "s"
   # Minimum score (0 = disabled)
-  min_score: 50
+  min_score: 30

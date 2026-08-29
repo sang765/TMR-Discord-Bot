@@ -40,18 +40,12 @@ func NewKonachanClient(tags, rating string, minScore int) *KonachanClient {
 
 func (c *KonachanClient) buildTags() string {
 	tags := ""
-	if c.Tags != "" {
-		tags = c.Tags
-	}
 	if c.Rating != "" {
-		if tags != "" {
-			tags += "+"
-		}
 		tags += "rating:" + c.Rating
 	}
 	if c.MinScore > 0 {
 		if tags != "" {
-			tags += "+"
+			tags += " "
 		}
 		tags += fmt.Sprintf("score:>%d", c.MinScore)
 	}
