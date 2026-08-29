@@ -13,7 +13,9 @@ if [ ! -f "./tmr-bot" ]; then
     fi
 
     export GOROOT=/home/container/go
-    export PATH=$GOROOT/bin:$PATH
+    export GOPATH=/home/container/gopath
+    export GOMODCACHE=/home/container/gopath/pkg/mod
+    export PATH=$GOROOT/bin:$GOPATH/bin:$PATH
 
     if [ ! -d "/home/container/go" ]; then
         echo "Installing Go..."
