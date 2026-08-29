@@ -58,13 +58,19 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *ut
 		return
 	}
 
-	data, err := utils.SmartCropIcon(img.FileURL, 512)
+	data, err := downloadImageForAuto(img.FileURL)
+	if err != nil {
+		slog.Error("Failed to download icon image", slog.Any("error", err))
+		return
+	}
+
+	cropped, err := utils.CropBytesToSquare(data, 512)
 	if err != nil {
 		slog.Error("Failed to crop icon image", slog.Any("error", err))
 		return
 	}
 
-	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(cropped))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})

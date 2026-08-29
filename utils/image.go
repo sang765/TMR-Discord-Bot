@@ -17,6 +17,10 @@ func SmartCropIcon(url string, size int) ([]byte, error) {
 		return nil, err
 	}
 
+	return CropBytesToSquare(data, size)
+}
+
+func CropBytesToSquare(data []byte, size int) ([]byte, error) {
 	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode image: %w", err)

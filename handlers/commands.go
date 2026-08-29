@@ -154,12 +154,17 @@ func handleSetAvatar(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 }
 
 func downloadAndSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, img *utils.KonachanPost, guildID string) error {
-	data, err := utils.SmartCropIcon(img.FileURL, 512)
+	data, err := downloadImage(img.FileURL)
 	if err != nil {
 		return err
 	}
 
-	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
+	cropped, err := utils.CropBytesToSquare(data, 512)
+	if err != nil {
+		return err
+	}
+
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(cropped))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
