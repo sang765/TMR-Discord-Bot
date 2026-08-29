@@ -3,8 +3,13 @@
 cd /home/container
 
 if [ ! -f "./tmr-bot" ]; then
-    echo "Binary not found. Please upload tmr-bot or compile with: go build -o tmr-bot ."
-    exit 1
+    echo "Binary not found. Compiling..."
+    go build -o tmr-bot .
+    if [ $? -ne 0 ]; then
+        echo "Build failed!"
+        exit 1
+    fi
+    echo "Build successful!"
 fi
 
 if [ ! -f "./.env" ]; then
@@ -12,4 +17,5 @@ if [ ! -f "./.env" ]; then
     exit 1
 fi
 
+chmod +x tmr-bot
 ./tmr-bot
