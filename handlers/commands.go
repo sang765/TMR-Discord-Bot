@@ -44,8 +44,6 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		handleSetIcon(s, m, kc, cfg, guildID)
 	case "setbanner":
 		handleSetBanner(s, m, kc, cfg, guildID)
-	case "setavatar":
-		handleSetAvatar(s, m, kc, cfg)
 	case "boost":
 		handleBoostCheck(s, m, guildID)
 	case "config":
@@ -100,8 +98,7 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"`%sconfig` - Show bot config\n\n"+
 		"**Image Commands:**\n"+
 		"`%sseticon` - Set server icon from konachan\n"+
-		"`%ssetbanner` - Set server banner from konachan\n"+
-		"`%ssetavatar` - Set your avatar from konachan\n\n"+
+		"`%ssetbanner` - Set server banner from konachan\n\n"+
 		"**Settings:**\n"+
 		"`%sinterval <seconds>` - Set auto change interval\n"+
 		"`%ssetprefix <prefix>` - Set bot prefix\n"+
@@ -112,8 +109,8 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"`%stoggle icon` - Toggle auto icon\n"+
 		"`%stoggle banner` - Toggle auto banner\n\n"+
 		"Powered by konachan.net",
-		prefix, prefix, prefix, prefix, prefix, prefix,
-		prefix, prefix, prefix, prefix, prefix, prefix, prefix)
+		prefix, prefix, prefix, prefix, prefix,
+		prefix, prefix, prefix, prefix, prefix, prefix)
 
 	sendMessage(s, m, content)
 }
@@ -154,33 +151,6 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 	}
 
 	sendMessage(s, m, fmt.Sprintf("Banner updated! Score: %d", img.Score))
-}
-
-func handleSetAvatar(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, cfg *config.Config) {
-	sendMessage(s, m, "Fetching random avatar from konachan...")
-
-	avatarKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
-
-	img, err := avatarKC.GetRandomImage()
-	if err != nil {
-		sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", err))
-		return
-	}
-
-	data, err := utils.SmartCropIcon(img.FileURL, 512)
-	if err != nil {
-		sendMessage(s, m, fmt.Sprintf("Error cropping image: %v", err))
-		return
-	}
-
-	avatar := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
-	_, err = s.UserUpdate("", avatar, "")
-	if err != nil {
-		sendMessage(s, m, fmt.Sprintf("Error setting avatar: %v", err))
-		return
-	}
-
-	sendMessage(s, m, fmt.Sprintf("Avatar updated! Score: %d", img.Score))
 }
 
 func downloadAndSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, img *utils.KonachanPost, guildID string) error {
