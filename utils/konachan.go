@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -17,7 +18,6 @@ type KonachanPost struct {
 	Rating   string `json:"rating"`
 	Tags     string `json:"tags"`
 	Score    int    `json:"score"`
-	ForumURL string `json:"forum_url"`
 }
 
 type KonachanClient struct {
@@ -38,7 +38,7 @@ func NewKonachanClient(tags, rating string, minScore int) *KonachanClient {
 	}
 }
 
-func (c *KonachanClient) GetRandomImage() (*KonachanPost, error) {
+func (c *KonachanClient) buildTags() string {
 	tags := c.Tags
 	if c.Rating != "" {
 		tags += " rating:" + c.Rating
@@ -46,10 +46,15 @@ func (c *KonachanClient) GetRandomImage() (*KonachanPost, error) {
 	if c.MinScore > 0 {
 		tags += fmt.Sprintf(" score:>%d", c.MinScore)
 	}
+	return tags
+}
+
+func (c *KonachanClient) GetRandomImage() (*KonachanPost, error) {
+	tags := c.buildTags()
 
 	url := fmt.Sprintf(
-		"https://konachan.com/post.json?limit=50&tags=%s",
-		tags,
+		"https://konachan.net/post.json?limit=50&tags=%s",
+		url.QueryEscape(tags),
 	)
 
 	resp, err := c.HTTPClient.Get(url)
@@ -76,18 +81,12 @@ func (c *KonachanClient) GetRandomImage() (*KonachanPost, error) {
 }
 
 func (c *KonachanClient) GetRandomImages(count int) ([]KonachanPost, error) {
-	tags := c.Tags
-	if c.Rating != "" {
-		tags += " rating:" + c.Rating
-	}
-	if c.MinScore > 0 {
-		tags += fmt.Sprintf(" score:>%d", c.MinScore)
-	}
+	tags := c.buildTags()
 
 	url := fmt.Sprintf(
-		"https://konachan.com/post.json?limit=%d&tags=%s",
+		"https://konachan.net/post.json?limit=%d&tags=%s",
 		count,
-		tags,
+		url.QueryEscape(tags),
 	)
 
 	resp, err := c.HTTPClient.Get(url)
