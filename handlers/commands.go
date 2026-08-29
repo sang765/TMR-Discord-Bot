@@ -62,6 +62,30 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		} else {
 			sendMessage(s, m, "Usage: !toggle <icon|banner>")
 		}
+	case "setprefix":
+		if len(args) > 1 {
+			handleSetPrefix(s, m, cfg, args[1])
+		} else {
+			sendMessage(s, m, fmt.Sprintf("Current prefix: `%s`", cfg.Bot.Prefix))
+		}
+	case "setstatus":
+		if len(args) > 1 {
+			handleSetStatus(s, m, cfg, strings.Join(args[1:], " "))
+		} else {
+			sendMessage(s, m, fmt.Sprintf("Current status: `%s`", cfg.Bot.Status))
+		}
+	case "setrating":
+		if len(args) > 1 {
+			handleSetRating(s, m, cfg, args[1])
+		} else {
+			sendMessage(s, m, fmt.Sprintf("Current rating: `%s` (s=safe, q=questionable, e=explicit)", cfg.Konachan.Rating))
+		}
+	case "setscore":
+		if len(args) > 1 {
+			handleSetScore(s, m, cfg, args[1])
+		} else {
+			sendMessage(s, m, fmt.Sprintf("Current min score: %d", cfg.Konachan.MinScore))
+		}
 	default:
 		sendMessage(s, m, fmt.Sprintf("Unknown command: %s. Use %shelp for help.", cmd, actualPrefix))
 	}
@@ -73,17 +97,23 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"**General:**\n"+
 		"`%shelp` - Show this help\n"+
 		"`%sboost` - Check server boost level\n"+
-		"`%sconfig` - Show bot config\n"+
-		"`%sinterval <seconds>` - Set auto change interval\n\n"+
+		"`%sconfig` - Show bot config\n\n"+
 		"**Image Commands:**\n"+
 		"`%sseticon` - Set server icon from konachan\n"+
 		"`%ssetbanner` - Set server banner from konachan\n"+
 		"`%ssetavatar` - Set your avatar from konachan\n\n"+
+		"**Settings:**\n"+
+		"`%sinterval <seconds>` - Set auto change interval\n"+
+		"`%ssetprefix <prefix>` - Set bot prefix\n"+
+		"`%ssetstatus <text>` - Set bot status\n"+
+		"`%ssetrating <s|q|e>` - Set image rating\n"+
+		"`%ssetscore <number>` - Set minimum score\n\n"+
 		"**Toggle:**\n"+
 		"`%stoggle icon` - Toggle auto icon\n"+
 		"`%stoggle banner` - Toggle auto banner\n\n"+
 		"Powered by konachan.net",
-		prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix)
+		prefix, prefix, prefix, prefix, prefix, prefix,
+		prefix, prefix, prefix, prefix, prefix, prefix, prefix)
 
 	sendMessage(s, m, content)
 }
@@ -223,25 +253,37 @@ func getBoostFeature(currentTier, requiredTier int, lockedMsg string) string {
 }
 
 func sendConfig(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config) {
+	iconStatus := "OFF"
+	if cfg.Auto.IconEnabled {
+		iconStatus = "ON"
+	}
+	bannerStatus := "OFF"
+	if cfg.Auto.BannerEnabled {
+		bannerStatus = "ON"
+	}
+
 	content := fmt.Sprintf("**Bot Configuration**\n\n"+
-		"**Prefix:** %s\n"+
-		"**Status:** %s\n"+
-		"**Auto Icon:** %v\n"+
-		"**Auto Banner:** %v\n"+
-		"**Interval:** %d seconds\n"+
-		"**Icon Tags:** %s\n"+
-		"**Banner Tags:** %s\n"+
-		"**Rating:** %s\n"+
-		"**Min Score:** %d",
+		"**Bot Settings:**\n"+
+		"- Prefix: `%s`\n"+
+		"- Status: `%s`\n\n"+
+		"**Auto Settings:**\n"+
+		"- Auto Icon: `%s`\n"+
+		"- Auto Banner: `%s`\n"+
+		"- Interval: `%d seconds` (%d min)\n\n"+
+		"**Konachan Settings:**\n"+
+		"- Rating: `%s`\n"+
+		"- Min Score: `%d`\n\n"+
+		"**Server Info:**\n"+
+		"- Guild ID: `%s`",
 		cfg.Bot.Prefix,
 		cfg.Bot.Status,
-		cfg.Auto.IconEnabled,
-		cfg.Auto.BannerEnabled,
+		iconStatus,
+		bannerStatus,
 		cfg.Auto.Interval,
-		cfg.Konachan.IconTags,
-		cfg.Konachan.BannerTags,
+		cfg.Auto.Interval/60,
 		cfg.Konachan.Rating,
-		cfg.Konachan.MinScore)
+		cfg.Konachan.MinScore,
+		m.GuildID)
 
 	sendMessage(s, m, content)
 }
@@ -267,6 +309,40 @@ func handleToggle(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.
 	default:
 		sendMessage(s, m, "Usage: !toggle <icon|banner>")
 	}
+}
+
+func handleSetPrefix(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
+	if len(value) > 5 {
+		sendMessage(s, m, "Prefix must be 1-5 characters")
+		return
+	}
+	cfg.Bot.Prefix = value
+	sendMessage(s, m, fmt.Sprintf("Prefix set to `%s`", value))
+}
+
+func handleSetStatus(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
+	cfg.Bot.Status = value
+	sendMessage(s, m, fmt.Sprintf("Status set to `%s`", value))
+}
+
+func handleSetRating(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
+	value = strings.ToLower(value)
+	if value != "s" && value != "q" && value != "e" {
+		sendMessage(s, m, "Rating must be `s` (safe), `q` (questionable), or `e` (explicit)")
+		return
+	}
+	cfg.Konachan.Rating = value
+	sendMessage(s, m, fmt.Sprintf("Rating set to `%s`", value))
+}
+
+func handleSetScore(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
+	var score int
+	if _, err := fmt.Sscanf(value, "%d", &score); err != nil || score < 0 {
+		sendMessage(s, m, "Score must be a number >= 0")
+		return
+	}
+	cfg.Konachan.MinScore = score
+	sendMessage(s, m, fmt.Sprintf("Min score set to `%d`", score))
 }
 
 func sendMessage(s *discordgo.Session, m *discordgo.MessageCreate, content string) {
