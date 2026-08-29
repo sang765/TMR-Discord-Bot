@@ -19,9 +19,10 @@ wallhaven:
   # API key (optional, leave empty for public API)
   api_key: ""
   # Categories: anime, general, people (1=on, 0=off)
+  # 100 = anime only, 010 = general only, 110 = anime + general
   categories:
     anime: 1
-    general: 1
+    general: 0
     people: 0
   # Purity: sfw, sketchy, nsfw (1=on, 0=off)
   purity:
