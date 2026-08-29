@@ -1,5 +1,7 @@
 #!/bin/bash
 
+chmod +x /home/container/tmr-bot
+
 cd /home/container
 
 if [ ! -d ".git" ]; then
@@ -50,5 +52,4 @@ if [ ! -f "./.env" ]; then
     exit 1
 fi
 
-chmod +x tmr-bot
 ./tmr-bot
