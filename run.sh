@@ -4,7 +4,7 @@ cd /home/container
 
 if [ ! -f "./tmr-bot" ]; then
     echo "Binary not found. Compiling..."
-    go build -o tmr-bot .
+    CGO_ENABLED=0 go build -o tmr-bot .
     if [ $? -ne 0 ]; then
         echo "Build failed!"
         exit 1
