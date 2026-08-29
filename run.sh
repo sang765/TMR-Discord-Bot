@@ -3,7 +3,14 @@
 cd /home/container
 
 if [ ! -f "./tmr-bot" ]; then
-    echo "Binary not found. Compiling..."
+    echo "Binary not found. Cloning from git..."
+
+    if [ ! -d ".git" ]; then
+        git clone https://github.com/sang765/TMR-Discord-Bot.git /tmp/repo
+        cp -r /tmp/repo/* /home/container/
+        cp -r /tmp/repo/.* /home/container/ 2>/dev/null
+        rm -rf /tmp/repo
+    fi
 
     export GOROOT=/home/container/go
     export PATH=$GOROOT/bin:$PATH
@@ -26,6 +33,9 @@ fi
 
 if [ ! -f "./.env" ]; then
     echo ".env file not found!"
+    echo "Create .env with:"
+    echo "DISCORD_TOKEN=your_token"
+    echo "GUILD_ID=your_server_id"
     exit 1
 fi
 
