@@ -12,36 +12,22 @@ type BotConfig struct {
 }
 
 type AutoConfig struct {
-	IconEnabled  bool  `yaml:"icon_enabled"`
+	IconEnabled   bool `yaml:"icon_enabled"`
 	BannerEnabled bool `yaml:"banner_enabled"`
-	Interval     int   `yaml:"interval"`
+	Interval      int  `yaml:"interval"`
 }
 
-type WallhavenCategories struct {
-	Anime   int `yaml:"anime"`
-	General int `yaml:"general"`
-	People  int `yaml:"people"`
-}
-
-type WallhavenPurity struct {
-	SFW      int `yaml:"sfw"`
-	Sketchy  int `yaml:"sketchy"`
-	NSFW     int `yaml:"nsfw"`
-}
-
-type WallhavenConfig struct {
-	APIKey      string              `yaml:"api_key"`
-	Categories  WallhavenCategories `yaml:"categories"`
-	Purity      WallhavenPurity     `yaml:"purity"`
-	Sorting     string              `yaml:"sorting"`
-	BannerRatio string              `yaml:"banner_ratio"`
-	IconRatio   string              `yaml:"icon_ratio"`
+type KonachanConfig struct {
+	IconTags  string `yaml:"icon_tags"`
+	BannerTags string `yaml:"banner_tags"`
+	Rating    string `yaml:"rating"`
+	MinScore  int    `yaml:"min_score"`
 }
 
 type Config struct {
-	Bot       BotConfig       `yaml:"bot"`
-	Auto      AutoConfig      `yaml:"auto"`
-	Wallhaven WallhavenConfig `yaml:"wallhaven"`
+	Bot      BotConfig      `yaml:"bot"`
+	Auto     AutoConfig     `yaml:"auto"`
+	Konachan KonachanConfig `yaml:"konachan"`
 }
 
 type EnvConfig struct {
@@ -65,21 +51,11 @@ func LoadConfig(path string) (*Config, error) {
 			BannerEnabled: true,
 			Interval:      300,
 		},
-		Wallhaven: WallhavenConfig{
-			APIKey: "",
-			Categories: WallhavenCategories{
-				Anime:   1,
-				General: 1,
-				People:  0,
-			},
-			Purity: WallhavenPurity{
-				SFW:     1,
-				Sketchy: 0,
-				NSFW:    0,
-			},
-			Sorting:     "random",
-			BannerRatio: "16x9",
-			IconRatio:   "1x1",
+		Konachan: KonachanConfig{
+			IconTags:   "1girl",
+			BannerTags: "landscape",
+			Rating:     "s",
+			MinScore:   50,
 		},
 	}
 

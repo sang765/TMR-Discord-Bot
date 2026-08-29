@@ -13,7 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, wc *utils.WallhavenClient, guildID string) {
+func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, kc *utils.KonachanClient, guildID string) {
 	if m.Author.Bot {
 		return
 	}
@@ -41,9 +41,9 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 	case "help":
 		sendHelp(s, m, cfg)
 	case "seticon":
-		handleSetIcon(s, m, wc, cfg, guildID)
+		handleSetIcon(s, m, kc, cfg, guildID)
 	case "setbanner":
-		handleSetBanner(s, m, wc, cfg, guildID)
+		handleSetBanner(s, m, kc, cfg, guildID)
 	case "boost":
 		handleBoostCheck(s, m, guildID)
 	case "config":
@@ -74,25 +74,23 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"`%sconfig` - Show bot config\n"+
 		"`%sinterval <seconds>` - Set auto change interval\n\n"+
 		"**Image Commands:**\n"+
-		"`%sseticon` - Set random icon from wallhaven\n"+
-		"`%ssetbanner` - Set random banner from wallhaven\n\n"+
+		"`%sseticon` - Set random icon from konachan\n"+
+		"`%ssetbanner` - Set random banner from konachan\n\n"+
 		"**Toggle:**\n"+
 		"`%stoggle icon` - Toggle auto icon\n"+
 		"`%stoggle banner` - Toggle auto banner\n\n"+
-		"Powered by wallhaven.cc",
+		"Powered by konachan.net",
 		prefix, prefix, prefix, prefix, prefix, prefix, prefix)
 
 	sendMessage(s, m, content)
 }
 
-func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, wc *utils.WallhavenClient, cfg *config.Config, guildID string) {
-	sendMessage(s, m, "Fetching random icon from wallhaven...")
+func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, cfg *config.Config, guildID string) {
+	sendMessage(s, m, "Fetching random icon from konachan...")
 
-	iconWC := utils.NewWallhavenClient(
-		wc.APIKey, wc.Categories, wc.Purity, wc.Sorting, cfg.Wallhaven.IconRatio,
-	)
+	iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 
-	img, err := iconWC.GetRandomImage()
+	img, err := iconKC.GetRandomImage()
 	if err != nil {
 		sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", err))
 		return
@@ -103,17 +101,15 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, wc *utils.W
 		return
 	}
 
-	sendMessage(s, m, fmt.Sprintf("Icon updated! Source: %s", img.URL))
+	sendMessage(s, m, fmt.Sprintf("Icon updated! Score: %d", img.Score))
 }
 
-func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, wc *utils.WallhavenClient, cfg *config.Config, guildID string) {
-	sendMessage(s, m, "Fetching random banner from wallhaven...")
+func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, cfg *config.Config, guildID string) {
+	sendMessage(s, m, "Fetching random banner from konachan...")
 
-	bannerWC := utils.NewWallhavenClient(
-		wc.APIKey, wc.Categories, wc.Purity, wc.Sorting, cfg.Wallhaven.BannerRatio,
-	)
+	bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 
-	img, err := bannerWC.GetRandomImage()
+	img, err := bannerKC.GetRandomImage()
 	if err != nil {
 		sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", err))
 		return
@@ -124,29 +120,29 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, wc *utils
 		return
 	}
 
-	sendMessage(s, m, fmt.Sprintf("Banner updated! Source: %s", img.URL))
+	sendMessage(s, m, fmt.Sprintf("Banner updated! Score: %d", img.Score))
 }
 
-func downloadAndSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, img *utils.WallhavenImage, guildID string) error {
-	data, err := downloadImage(img.Path)
+func downloadAndSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, img *utils.KonachanPost, guildID string) error {
+	data, err := utils.SmartCropIcon(img.FileURL, 512)
 	if err != nil {
 		return err
 	}
 
-	dataURI := fmt.Sprintf("data:image/png;base64,%s", encodeBase64(data))
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
 	return err
 }
 
-func downloadAndSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, img *utils.WallhavenImage, guildID string) error {
-	data, err := downloadImage(img.Path)
+func downloadAndSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, img *utils.KonachanPost, guildID string) error {
+	data, err := downloadImage(img.FileURL)
 	if err != nil {
 		return err
 	}
 
-	dataURI := fmt.Sprintf("data:image/png;base64,%s", encodeBase64(data))
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
@@ -198,17 +194,19 @@ func sendConfig(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Co
 		"**Auto Icon:** %v\n"+
 		"**Auto Banner:** %v\n"+
 		"**Interval:** %d seconds\n"+
-		"**Wallhaven Sorting:** %s\n"+
-		"**Banner Ratio:** %s\n"+
-		"**Icon Ratio:** %s",
+		"**Icon Tags:** %s\n"+
+		"**Banner Tags:** %s\n"+
+		"**Rating:** %s\n"+
+		"**Min Score:** %d",
 		cfg.Bot.Prefix,
 		cfg.Bot.Status,
 		cfg.Auto.IconEnabled,
 		cfg.Auto.BannerEnabled,
 		cfg.Auto.Interval,
-		cfg.Wallhaven.Sorting,
-		cfg.Wallhaven.BannerRatio,
-		cfg.Wallhaven.IconRatio)
+		cfg.Konachan.IconTags,
+		cfg.Konachan.BannerTags,
+		cfg.Konachan.Rating,
+		cfg.Konachan.MinScore)
 
 	sendMessage(s, m, content)
 }
@@ -240,7 +238,7 @@ func sendMessage(s *discordgo.Session, m *discordgo.MessageCreate, content strin
 	s.ChannelMessageSend(m.ChannelID, content)
 }
 
-func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *config.Config, wc *utils.WallhavenClient, guildID string) {
+func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *config.Config, kc *utils.KonachanClient, guildID string) {
 	if i.Type != discordgo.InteractionApplicationCommand {
 		return
 	}

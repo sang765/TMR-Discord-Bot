@@ -1,23 +1,24 @@
 # TMR Discord Bot
 
-Discord bot auto thay đổi server icon và server banner từ [wallhaven.cc](https://wallhaven.cc)
+Discord bot auto thay đổi server icon và server banner từ [konachan.net](https://konachan.net)
 
 ## Tính năng
 
 - Auto thay đổi server icon (Boost Level 1+)
 - Auto thay đổi server banner (Boost Level 2+)
-- Random ảnh từ wallhaven.cc API
+- Random ảnh anime từ konachan.net API
 - Prefix commands (`!` và `.`)
 - Slash commands
 - Config file YAML
+- Lọc theo tags, rating, score
 
 ## Commands
 
 | Command | Mô tả |
 |---------|-------|
 | `!help` | Hiển thị danh sách commands |
-| `!seticon` | Set icon ngẫu nhiên từ wallhaven |
-| `!setbanner` | Set banner ngẫu nhiên từ wallhaven |
+| `!seticon` | Set icon ngẫu nhiên từ konachan |
+| `!setbanner` | Set banner ngẫu nhiên từ konachan |
 | `!boost` | Kiểm tra boost level server |
 | `!config` | Xem cấu hình bot |
 | `!interval <seconds>` | Đặt interval auto change |
@@ -53,10 +54,11 @@ auto:
   banner_enabled: true
   interval: 300  # giây
 
-wallhaven:
-  sorting: random
-  banner_ratio: "16x9"
-  icon_ratio: "1x1"
+konachan:
+  icon_tags: "1girl"
+  banner_tags: "landscape"
+  rating: "s"  # s=safe, q=questionable, e=explicit
+  min_score: 50
 ```
 
 ### 4. Chạy bot

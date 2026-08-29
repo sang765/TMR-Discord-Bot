@@ -19,7 +19,7 @@ func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
 
-func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, wc *utils.WallhavenClient) {
+func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient) {
 	interval := time.Duration(cfg.Auto.Interval) * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -37,36 +37,34 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 			return
 		case <-ticker.C:
 			if cfg.Auto.IconEnabled {
-				changeIcon(s, guildID, cfg, wc)
+				changeIcon(s, guildID, cfg, kc)
 			}
 			time.Sleep(5 * time.Second)
 			if cfg.Auto.BannerEnabled {
-				changeBanner(s, guildID, cfg, wc)
+				changeBanner(s, guildID, cfg, kc)
 			}
 		}
 	}
 }
 
-func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, wc *utils.WallhavenClient) {
+func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient) {
 	slog.Info("Changing server icon...")
 
-	iconWC := utils.NewWallhavenClient(
-		wc.APIKey, wc.Categories, wc.Purity, wc.Sorting, cfg.Wallhaven.IconRatio,
-	)
+	iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 
-	img, err := iconWC.GetRandomImage()
+	img, err := iconKC.GetRandomImage()
 	if err != nil {
 		slog.Error("Failed to fetch icon image", slog.Any("error", err))
 		return
 	}
 
-	data, err := downloadImageForAuto(img.Path)
+	data, err := utils.SmartCropIcon(img.FileURL, 512)
 	if err != nil {
-		slog.Error("Failed to download icon image", slog.Any("error", err))
+		slog.Error("Failed to crop icon image", slog.Any("error", err))
 		return
 	}
 
-	dataURI := fmt.Sprintf("data:image/png;base64,%s", encodeBase64(data))
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
@@ -75,29 +73,27 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, wc *ut
 		return
 	}
 
-	slog.Info("Server icon updated", slog.String("source", img.URL))
+	slog.Info("Server icon updated", slog.Int("id", img.ID), slog.Int("score", img.Score))
 }
 
-func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, wc *utils.WallhavenClient) {
+func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient) {
 	slog.Info("Changing server banner...")
 
-	bannerWC := utils.NewWallhavenClient(
-		wc.APIKey, wc.Categories, wc.Purity, wc.Sorting, cfg.Wallhaven.BannerRatio,
-	)
+	bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 
-	img, err := bannerWC.GetRandomImage()
+	img, err := bannerKC.GetRandomImage()
 	if err != nil {
 		slog.Error("Failed to fetch banner image", slog.Any("error", err))
 		return
 	}
 
-	data, err := downloadImageForAuto(img.Path)
+	data, err := downloadImageForAuto(img.FileURL)
 	if err != nil {
 		slog.Error("Failed to download banner image", slog.Any("error", err))
 		return
 	}
 
-	dataURI := fmt.Sprintf("data:image/png;base64,%s", encodeBase64(data))
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
@@ -106,7 +102,7 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, wc *
 		return
 	}
 
-	slog.Info("Server banner updated", slog.String("source", img.URL))
+	slog.Info("Server banner updated", slog.Int("id", img.ID), slog.Int("score", img.Score))
 }
 
 func downloadImageForAuto(url string) ([]byte, error) {

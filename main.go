@@ -44,43 +44,16 @@ func main() {
 				BannerEnabled: true,
 				Interval:      300,
 			},
-			Wallhaven: config.WallhavenConfig{
-				APIKey: "",
-				Categories: config.WallhavenCategories{
-					Anime:   1,
-					General: 1,
-					People:  0,
-				},
-				Purity: config.WallhavenPurity{
-					SFW:     1,
-					Sketchy: 0,
-					NSFW:    0,
-				},
-				Sorting:     "random",
-				BannerRatio: "16x9",
-				IconRatio:   "1x1",
+			Konachan: config.KonachanConfig{
+				IconTags:   "1girl",
+				BannerTags: "landscape",
+				Rating:     "s",
+				MinScore:   50,
 			},
 		}
 	}
 
-	categories := utils.BuildCategoriesString(
-		cfg.Wallhaven.Categories.Anime,
-		cfg.Wallhaven.Categories.General,
-		cfg.Wallhaven.Categories.People,
-	)
-	purity := utils.BuildPurityString(
-		cfg.Wallhaven.Purity.SFW,
-		cfg.Wallhaven.Purity.Sketchy,
-		cfg.Wallhaven.Purity.NSFW,
-	)
-
-	wallhavenClient := utils.NewWallhavenClient(
-		cfg.Wallhaven.APIKey,
-		categories,
-		purity,
-		cfg.Wallhaven.Sorting,
-		"",
-	)
+	konachanClient := utils.NewKonachanClient("", cfg.Konachan.Rating, cfg.Konachan.MinScore)
 
 	dg, err := discordgo.New("Bot " + env.DiscordToken)
 	if err != nil {
@@ -96,11 +69,11 @@ func main() {
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		handlers.MessageHandler(s, m, cfg, wallhavenClient, env.GuildID)
+		handlers.MessageHandler(s, m, cfg, konachanClient, env.GuildID)
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		handlers.InteractionHandler(s, i, cfg, wallhavenClient, env.GuildID)
+		handlers.InteractionHandler(s, i, cfg, konachanClient, env.GuildID)
 	})
 
 	err = dg.Open()
@@ -113,10 +86,12 @@ func main() {
 		slog.Bool("auto_icon", cfg.Auto.IconEnabled),
 		slog.Bool("auto_banner", cfg.Auto.BannerEnabled),
 		slog.Int("interval", cfg.Auto.Interval),
+		slog.String("icon_tags", cfg.Konachan.IconTags),
+		slog.String("banner_tags", cfg.Konachan.BannerTags),
 	)
 
 	if cfg.Auto.IconEnabled || cfg.Auto.BannerEnabled {
-		go handlers.AutoChangeLoop(context.TODO(), dg, env.GuildID, cfg, wallhavenClient)
+		go handlers.AutoChangeLoop(context.TODO(), dg, env.GuildID, cfg, konachanClient)
 	}
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
