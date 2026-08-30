@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -148,61 +147,23 @@ func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
 
 	entry := &response.Entries[rand.Intn(len(response.Entries))]
 
-	// If no direct URL, try to scrape from page
-	if entry.GetImageURL() == "" && entry.ID > 0 {
-		fullURL, err := c.scrapeFullImageURL(entry.ID)
-		if err == nil && fullURL != "" {
-			entry.Full = fullURL
-		}
-	}
-
 	return entry, nil
 }
 
-func (c *ZerochanClient) scrapeFullImageURL(id int) (string, error) {
-	pageURL := fmt.Sprintf("%s/%d", zerochanBaseURL, id)
-
-	resp, err := c.doRequest(pageURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	// Look for full image URL in the page
-	// ZeroChan pages have: <img id="image" src="..." />
-	re := regexp.MustCompile(`id="image"[^>]*src="([^"]+)"`)
-	matches := re.FindSubmatch(body)
-	if len(matches) > 1 {
-		return string(matches[1]), nil
-	}
-
-	// Also try: data-src="..."
-	re2 := regexp.MustCompile(`id="image"[^>]*data-src="([^"]+)"`)
-	matches2 := re2.FindSubmatch(body)
-	if len(matches2) > 1 {
-		return string(matches2[1]), nil
-	}
-
-	return "", fmt.Errorf("could not find image URL in page")
-}
-
 func (c *ZerochanEntry) GetImageURL() string {
-	// Try direct URL fields
+	// Try direct URL fields first
 	urls := []string{c.Full, c.URL, c.Image, c.File, c.Medium, c.Small}
 	for _, u := range urls {
 		u = strings.TrimSpace(u)
 		if u != "" && strings.HasPrefix(u, "http") {
 			return u
 		}
+	}
+
+	// Construct full image URL from tag and ID
+	// Format: https://static.zerochan.net/{Tag}.full.{ID}.jpg
+	if c.Tag != "" && c.ID > 0 {
+		return fmt.Sprintf("https://static.zerochan.net/%s.full.%d.jpg", c.Tag, c.ID)
 	}
 
 	// Use thumbnail as fallback
