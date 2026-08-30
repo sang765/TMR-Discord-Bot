@@ -13,8 +13,27 @@ if [ ! -d ".git" ]; then
     rm -rf /tmp/repo
 else
     echo "Pulling latest changes..."
+
+    # Backup config files before pull
+    if [ -f "./config/config.yml" ]; then
+        cp ./config/config.yml ./config/config.yml.bak
+        echo "Config backed up."
+    fi
+    if [ -f "./.env" ]; then
+        cp ./.env ./.env.bak
+    fi
+
     git fetch --all
     git reset --hard origin/main
+
+    # Restore config files after pull
+    if [ -f "./config/config.yml.bak" ]; then
+        mv ./config/config.yml.bak ./config/config.yml
+        echo "Config restored."
+    fi
+    if [ -f "./.env.bak" ]; then
+        mv ./.env.bak ./.env
+    fi
 fi
 
 if [ -f "./tmr-bot" ]; then
