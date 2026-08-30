@@ -68,9 +68,11 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		}
 	case "toggleautoicon":
 		cfg.Auto.IconEnabled = !cfg.Auto.IconEnabled
+		config.SaveConfig(cfg)
 		sendMessage(s, m, fmt.Sprintf("Auto icon: %v", cfg.Auto.IconEnabled))
 	case "toggleautobanner":
 		cfg.Auto.BannerEnabled = !cfg.Auto.BannerEnabled
+		config.SaveConfig(cfg)
 		sendMessage(s, m, fmt.Sprintf("Auto banner: %v", cfg.Auto.BannerEnabled))
 	case "source":
 		if len(args) > 1 {
@@ -345,6 +347,7 @@ func handleSetInterval(s *discordgo.Session, m *discordgo.MessageCreate, cfg *co
 		return
 	}
 	cfg.Auto.Interval = interval
+	config.SaveConfig(cfg)
 	sendMessage(s, m, fmt.Sprintf("Interval set to %d seconds", interval))
 }
 
@@ -352,9 +355,11 @@ func handleToggle(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.
 	switch strings.ToLower(target) {
 	case "icon":
 		cfg.Auto.IconEnabled = !cfg.Auto.IconEnabled
+		config.SaveConfig(cfg)
 		sendMessage(s, m, fmt.Sprintf("Auto icon: %v", cfg.Auto.IconEnabled))
 	case "banner":
 		cfg.Auto.BannerEnabled = !cfg.Auto.BannerEnabled
+		config.SaveConfig(cfg)
 		sendMessage(s, m, fmt.Sprintf("Auto banner: %v", cfg.Auto.BannerEnabled))
 	default:
 		sendMessage(s, m, "Usage: !toggle <icon|banner>")
@@ -367,11 +372,13 @@ func handleSetPrefix(s *discordgo.Session, m *discordgo.MessageCreate, cfg *conf
 		return
 	}
 	cfg.Bot.Prefix = value
+	config.SaveConfig(cfg)
 	sendMessage(s, m, fmt.Sprintf("Prefix set to `%s`", value))
 }
 
 func handleSetStatus(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
 	cfg.Bot.Status = value
+	config.SaveConfig(cfg)
 	sendMessage(s, m, fmt.Sprintf("Status set to `%s`", value))
 }
 
@@ -382,6 +389,7 @@ func handleSetRating(s *discordgo.Session, m *discordgo.MessageCreate, cfg *conf
 		return
 	}
 	cfg.Konachan.Rating = value
+	config.SaveConfig(cfg)
 	sendMessage(s, m, fmt.Sprintf("Rating set to `%s`", value))
 }
 
@@ -392,6 +400,7 @@ func handleSetScore(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		return
 	}
 	cfg.Konachan.MinScore = score
+	config.SaveConfig(cfg)
 	sendMessage(s, m, fmt.Sprintf("Min score set to `%d`", score))
 }
 
@@ -400,6 +409,7 @@ func handleSetSource(s *discordgo.Session, m *discordgo.MessageCreate, cfg *conf
 	switch value {
 	case "konachan", "zerochan":
 		cfg.Source = value
+		config.SaveConfig(cfg)
 		sendMessage(s, m, fmt.Sprintf("Image source set to `%s`", value))
 	default:
 		sendMessage(s, m, "Available sources: `konachan`, `zerochan`")

@@ -18,10 +18,10 @@ type AutoConfig struct {
 }
 
 type KonachanConfig struct {
-	IconTags  string `yaml:"icon_tags"`
+	IconTags   string `yaml:"icon_tags"`
 	BannerTags string `yaml:"banner_tags"`
-	Rating    string `yaml:"rating"`
-	MinScore  int    `yaml:"min_score"`
+	Rating     string `yaml:"rating"`
+	MinScore   int    `yaml:"min_score"`
 }
 
 type ZerochanConfig struct {
@@ -33,12 +33,15 @@ type MoeWallsConfig struct {
 }
 
 type Config struct {
-	Bot       BotConfig       `yaml:"bot"`
-	Auto      AutoConfig      `yaml:"auto"`
-	Source    string          `yaml:"source"` // konachan, zerochan, moewalls
-	Konachan  KonachanConfig  `yaml:"konachan"`
-	Zerochan  ZerochanConfig  `yaml:"zerochan"`
-	MoeWalls  MoeWallsConfig  `yaml:"moewalls"`
+	Bot      BotConfig      `yaml:"bot"`
+	Auto     AutoConfig     `yaml:"auto"`
+	Source   string         `yaml:"source"` // konachan, zerochan, moewalls
+	Konachan KonachanConfig `yaml:"konachan"`
+	Zerochan ZerochanConfig `yaml:"zerochan"`
+	MoeWalls MoeWallsConfig `yaml:"moewalls"`
+
+	// Internal: path to save config
+	configPath string `yaml:"-"`
 }
 
 type EnvConfig struct {
@@ -75,6 +78,7 @@ func LoadConfig(path string) (*Config, error) {
 		MoeWalls: MoeWallsConfig{
 			Enabled: false,
 		},
+		configPath: path,
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -82,6 +86,20 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// SaveConfig writes the current config to the YAML file
+func SaveConfig(cfg *Config) error {
+	if cfg.configPath == "" {
+		return nil
+	}
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(cfg.configPath, data, 0644)
 }
 
 func LoadEnv() *EnvConfig {
