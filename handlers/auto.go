@@ -20,7 +20,8 @@ func encodeBase64(data []byte) string {
 }
 
 func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
-	interval := time.Duration(cfg.Auto.Interval) * time.Second
+	lastInterval := cfg.Auto.Interval
+	interval := time.Duration(lastInterval) * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -39,6 +40,14 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 			if cfg.Auto.BannerEnabled {
 				changeBanner(s, guildID, cfg, kc, zc)
 			}
+		}
+
+		// Check if interval changed, restart ticker if needed
+		if cfg.Auto.Interval != lastInterval {
+			lastInterval = cfg.Auto.Interval
+			interval = time.Duration(lastInterval) * time.Second
+			ticker.Reset(interval)
+			slog.Info("Auto change interval updated", slog.Duration("interval", interval))
 		}
 	}
 }
