@@ -113,9 +113,9 @@ func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
 	tags := c.Tags
 	if tags != "" {
 		encodedTag := strings.ReplaceAll(tags, " ", "%20")
-		apiURL = fmt.Sprintf("%s/%s?json&s=id&l=50", zerochanBaseURL, encodedTag)
+		apiURL = fmt.Sprintf("%s/%s?json&s=id&l=250", zerochanBaseURL, encodedTag)
 	} else {
-		apiURL = fmt.Sprintf("%s/?p=1&l=50&s=id&json", zerochanBaseURL)
+		apiURL = fmt.Sprintf("%s/?p=1&l=250&s=id&json", zerochanBaseURL)
 	}
 
 	resp, err := c.doRequest(apiURL)
