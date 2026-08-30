@@ -18,6 +18,11 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		return
 	}
 
+	// Only process messages from the configured guild
+	if m.GuildID != guildID {
+		return
+	}
+
 	content := m.Content
 	prefix := cfg.Bot.Prefix
 
@@ -452,6 +457,11 @@ func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
 
 func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, guildID string) {
 	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	// Only process interactions from the configured guild
+	if i.GuildID != guildID {
 		return
 	}
 
