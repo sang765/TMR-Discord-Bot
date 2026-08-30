@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -24,6 +25,13 @@ type ZerochanEntry struct {
 	Medium  string   `json:"medium"`
 	Small   string   `json:"small"`
 	Anime   string   `json:"anime"`
+
+	// Alternative field names that ZeroChan might use
+	URL    string `json:"url"`
+	Image  string `json:"image"`
+	File   string `json:"file"`
+	Thumb  string `json:"thumb"`
+	Thumb2 string `json:"thumb2"`
 }
 
 // ZerochanResponse handles both array and object responses
@@ -46,7 +54,7 @@ func (r *ZerochanResponse) UnmarshalJSON(data []byte) error {
 	}
 
 	// Check for common array fields
-	for _, key := range []string{"items", "entries", "data", "results", "list"} {
+	for _, key := range []string{"items", "entries", "data", "results", "list", "posts"} {
 		if arrRaw, ok := obj[key]; ok {
 			arrData, _ := json.Marshal(arrRaw)
 			var entries []ZerochanEntry
@@ -147,11 +155,15 @@ func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
 }
 
 func (c *ZerochanEntry) GetImageURL() string {
-	if c.Full != "" {
-		return c.Full
+	// Try all possible URL fields
+	urls := []string{c.Full, c.URL, c.Image, c.File, c.Medium, c.Small, c.Thumb, c.Thumb2}
+
+	for _, u := range urls {
+		u = strings.TrimSpace(u)
+		if u != "" && strings.HasPrefix(u, "http") {
+			return u
+		}
 	}
-	if c.Medium != "" {
-		return c.Medium
-	}
-	return c.Small
+
+	return ""
 }

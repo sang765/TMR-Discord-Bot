@@ -103,6 +103,10 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			return
 		}
 		imgURL = entry.GetImageURL()
+		if imgURL == "" {
+			slog.Error("No valid image URL from zerochan")
+			return
+		}
 	default: // konachan
 		bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, err := bannerKC.GetRandomImage()

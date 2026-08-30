@@ -153,6 +153,10 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 			return
 		}
 		imgURL = entry.GetImageURL()
+		if imgURL == "" {
+			sendMessage(s, m, "Error: No valid image URL found from zerochan")
+			return
+		}
 	default: // konachan
 		iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, e := iconKC.GetRandomImage()
@@ -184,6 +188,10 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 			return
 		}
 		imgURL = entry.GetImageURL()
+		if imgURL == "" {
+			sendMessage(s, m, "Error: No valid image URL found from zerochan")
+			return
+		}
 	default: // konachan
 		bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, e := bannerKC.GetRandomImage()
