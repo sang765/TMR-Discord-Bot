@@ -6,7 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -14,27 +14,25 @@ import (
 const zerochanBaseURL = "https://www.zerochan.net"
 
 type ZerochanEntry struct {
-	ID      int      `json:"id"`
-	Primary string   `json:"primary"`
-	Tags    []string `json:"tags"`
-	Width   int      `json:"width"`
-	Height  int      `json:"height"`
-	Fav     int      `json:"fav"`
-	Source  string   `json:"source"`
-	Full    string   `json:"full"`
-	Medium  string   `json:"medium"`
-	Small   string   `json:"small"`
-	Anime   string   `json:"anime"`
-
-	// Alternative field names that ZeroChan might use
-	URL    string `json:"url"`
-	Image  string `json:"image"`
-	File   string `json:"file"`
-	Thumb  string `json:"thumb"`
-	Thumb2 string `json:"thumb2"`
+	ID        int    `json:"id"`
+	Primary   string `json:"primary"`
+	Tags      any    `json:"tags"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
+	Fav       int    `json:"fav"`
+	Source    string `json:"source"`
+	Full      string `json:"full"`
+	Medium    string `json:"medium"`
+	Small     string `json:"small"`
+	Anime     string `json:"anime"`
+	Thumbnail string `json:"thumbnail"`
+	MD5       string `json:"md5"`
+	Tag       string `json:"tag"`
+	URL       string `json:"url"`
+	Image     string `json:"image"`
+	File      string `json:"file"`
 }
 
-// ZerochanResponse handles both array and object responses
 type ZerochanResponse struct {
 	Entries []ZerochanEntry
 }
@@ -106,7 +104,6 @@ func (c *ZerochanClient) doRequest(url string) (*http.Response, error) {
 }
 
 func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
-	// Rate limit: 60 req/min, wait at least 1 second between requests
 	elapsed := time.Since(c.LastRequest)
 	if elapsed < time.Second {
 		time.Sleep(time.Second - elapsed)
@@ -115,11 +112,9 @@ func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
 	var apiURL string
 	tags := c.Tags
 	if tags != "" {
-		// ZeroChan uses Title Case tags with spaces
-		encodedTag := url.PathEscape(tags)
+		encodedTag := strings.ReplaceAll(tags, " ", "%20")
 		apiURL = fmt.Sprintf("%s/%s?json&s=id&l=50", zerochanBaseURL, encodedTag)
 	} else {
-		// Browse all entries, sorted by newest
 		apiURL = fmt.Sprintf("%s/?p=1&l=50&s=id&json", zerochanBaseURL)
 	}
 
@@ -151,18 +146,68 @@ func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
 		return nil, fmt.Errorf("no images found on zerochan")
 	}
 
-	return &response.Entries[rand.Intn(len(response.Entries))], nil
+	entry := &response.Entries[rand.Intn(len(response.Entries))]
+
+	// If no direct URL, try to scrape from page
+	if entry.GetImageURL() == "" && entry.ID > 0 {
+		fullURL, err := c.scrapeFullImageURL(entry.ID)
+		if err == nil && fullURL != "" {
+			entry.Full = fullURL
+		}
+	}
+
+	return entry, nil
+}
+
+func (c *ZerochanClient) scrapeFullImageURL(id int) (string, error) {
+	pageURL := fmt.Sprintf("%s/%d", zerochanBaseURL, id)
+
+	resp, err := c.doRequest(pageURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// Look for full image URL in the page
+	// ZeroChan pages have: <img id="image" src="..." />
+	re := regexp.MustCompile(`id="image"[^>]*src="([^"]+)"`)
+	matches := re.FindSubmatch(body)
+	if len(matches) > 1 {
+		return string(matches[1]), nil
+	}
+
+	// Also try: data-src="..."
+	re2 := regexp.MustCompile(`id="image"[^>]*data-src="([^"]+)"`)
+	matches2 := re2.FindSubmatch(body)
+	if len(matches2) > 1 {
+		return string(matches2[1]), nil
+	}
+
+	return "", fmt.Errorf("could not find image URL in page")
 }
 
 func (c *ZerochanEntry) GetImageURL() string {
-	// Try all possible URL fields
-	urls := []string{c.Full, c.URL, c.Image, c.File, c.Medium, c.Small, c.Thumb, c.Thumb2}
-
+	// Try direct URL fields
+	urls := []string{c.Full, c.URL, c.Image, c.File, c.Medium, c.Small}
 	for _, u := range urls {
 		u = strings.TrimSpace(u)
 		if u != "" && strings.HasPrefix(u, "http") {
 			return u
 		}
+	}
+
+	// Use thumbnail as fallback
+	if c.Thumbnail != "" && strings.HasPrefix(c.Thumbnail, "http") {
+		return c.Thumbnail
 	}
 
 	return ""
