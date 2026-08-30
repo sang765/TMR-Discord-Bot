@@ -26,9 +26,52 @@ type ZerochanEntry struct {
 	Anime   string   `json:"anime"`
 }
 
+// ZerochanResponse handles both array and object responses
+type ZerochanResponse struct {
+	Entries []ZerochanEntry
+}
+
+func (r *ZerochanResponse) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as array first
+	var arr []ZerochanEntry
+	if err := json.Unmarshal(data, &arr); err == nil {
+		r.Entries = arr
+		return nil
+	}
+
+	// Try to unmarshal as object with common field names
+	var obj map[string]interface{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+
+	// Check for common array fields
+	for _, key := range []string{"items", "entries", "data", "results", "list"} {
+		if arrRaw, ok := obj[key]; ok {
+			arrData, _ := json.Marshal(arrRaw)
+			var entries []ZerochanEntry
+			if err := json.Unmarshal(arrData, &entries); err == nil {
+				r.Entries = entries
+				return nil
+			}
+		}
+	}
+
+	// If object has "id" field, it's a single entry
+	if _, hasID := obj["id"]; hasID {
+		var entry ZerochanEntry
+		if err := json.Unmarshal(data, &entry); err == nil {
+			r.Entries = []ZerochanEntry{entry}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unable to parse zerochan response")
+}
+
 type ZerochanClient struct {
-	Tags       string
-	HTTPClient *http.Client
+	Tags        string
+	HTTPClient  *http.Client
 	ProjectName string
 	Username    string
 	LastRequest time.Time
@@ -91,16 +134,16 @@ func (c *ZerochanClient) GetRandomImage() (*ZerochanEntry, error) {
 		return nil, fmt.Errorf("failed to read zerochan response: %w", err)
 	}
 
-	var entries []ZerochanEntry
-	if err := json.Unmarshal(body, &entries); err != nil {
+	var response ZerochanResponse
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse zerochan JSON: %w", err)
 	}
 
-	if len(entries) == 0 {
+	if len(response.Entries) == 0 {
 		return nil, fmt.Errorf("no images found on zerochan")
 	}
 
-	return &entries[rand.Intn(len(entries))], nil
+	return &response.Entries[rand.Intn(len(response.Entries))], nil
 }
 
 func (c *ZerochanEntry) GetImageURL() string {
