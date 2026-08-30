@@ -26,7 +26,6 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 
 	slog.Info("Auto change loop started",
 		slog.Duration("interval", interval),
-		slog.Bool("icon", cfg.Auto.IconEnabled),
 		slog.Bool("banner", cfg.Auto.BannerEnabled),
 	)
 
@@ -36,10 +35,6 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 			slog.Info("Auto change loop stopped")
 			return
 		case <-ticker.C:
-			if cfg.Auto.IconEnabled {
-				changeIcon(s, guildID, cfg, kc)
-			}
-			time.Sleep(5 * time.Second)
 			if cfg.Auto.BannerEnabled {
 				changeBanner(s, guildID, cfg, kc)
 			}

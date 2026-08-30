@@ -37,6 +37,12 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 
 	cmd := strings.ToLower(args[0])
 
+	// Permission check: only Manage Server or Administrator can use the bot
+	if !hasManageServerOrAdmin(s, m.Author.ID, m.GuildID) {
+		sendMessage(s, m, "You need **Manage Server** or **Administrator** permission to use this bot.")
+		return
+	}
+
 	switch cmd {
 	case "help":
 		sendHelp(s, m, cfg)
@@ -60,6 +66,12 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		} else {
 			sendMessage(s, m, "Usage: !toggle <icon|banner>")
 		}
+	case "toggleautoicon":
+		cfg.Auto.IconEnabled = !cfg.Auto.IconEnabled
+		sendMessage(s, m, fmt.Sprintf("Auto icon: %v", cfg.Auto.IconEnabled))
+	case "toggleautobanner":
+		cfg.Auto.BannerEnabled = !cfg.Auto.BannerEnabled
+		sendMessage(s, m, fmt.Sprintf("Auto banner: %v", cfg.Auto.BannerEnabled))
 	case "setprefix":
 		if len(args) > 1 {
 			handleSetPrefix(s, m, cfg, args[1])
@@ -107,10 +119,14 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"`%ssetscore <number>` - Set minimum score\n\n"+
 		"**Toggle:**\n"+
 		"`%stoggle icon` - Toggle auto icon\n"+
-		"`%stoggle banner` - Toggle auto banner\n\n"+
+		"`%stoggle banner` - Toggle auto banner\n"+
+		"`%stoggleautoicon` - Toggle auto icon (alias)\n"+
+		"`%stoggleautobanner` - Toggle auto banner (alias)\n\n"+
+		"⚠️ Requires **Manage Server** or **Administrator** permission.\n"+
 		"Powered by konachan.net",
 		prefix, prefix, prefix, prefix, prefix,
-		prefix, prefix, prefix, prefix, prefix, prefix)
+		prefix, prefix, prefix, prefix, prefix,
+		prefix, prefix, prefix, prefix)
 
 	sendMessage(s, m, content)
 }
@@ -319,8 +335,42 @@ func sendMessage(s *discordgo.Session, m *discordgo.MessageCreate, content strin
 	s.ChannelMessageSend(m.ChannelID, content)
 }
 
+func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
+	member, err := s.GuildMember(guildID, userID)
+	if err != nil {
+		return false
+	}
+
+	// Check Administrator first
+	for _, roleID := range member.Roles {
+		role, err := s.State.Role(guildID, roleID)
+		if err != nil {
+			continue
+		}
+		if role.Permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+			return true
+		}
+		if role.Permissions&discordgo.PermissionManageGuild == discordgo.PermissionManageGuild {
+			return true
+		}
+	}
+	return false
+}
+
 func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cfg *config.Config, kc *utils.KonachanClient, guildID string) {
 	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	// Permission check: only Manage Server or Administrator can use the bot
+	if !hasManageServerOrAdmin(s, i.Member.User.ID, i.GuildID) {
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "You need **Manage Server** or **Administrator** permission to use this bot.",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
 		return
 	}
 
