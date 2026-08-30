@@ -63,7 +63,7 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		if len(args) > 1 {
 			handleSetInterval(s, m, cfg, args[1])
 		} else {
-			sendMessage(s, m, fmt.Sprintf("Current interval: %d seconds", cfg.Auto.Interval))
+			sendMessage(s, m, fmt.Sprintf("Current interval: %s", formatDuration(time.Duration(cfg.Auto.Interval)*time.Second)))
 		}
 	case "toggle":
 		if len(args) > 1 {
@@ -354,14 +354,136 @@ func sendConfig(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Co
 }
 
 func handleSetInterval(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
-	var interval int
-	if _, err := fmt.Sscanf(value, "%d", &interval); err != nil || interval < 60 {
-		sendMessage(s, m, "Interval must be a number >= 60 seconds")
+	duration, err := parseDuration(value)
+	if err != nil {
+		sendMessage(s, m, fmt.Sprintf("Invalid format. Use: `1h30m`, `2d12h`, `30m`, `90s`\nMinimum: 1 minute"))
 		return
 	}
-	cfg.Auto.Interval = interval
+
+	seconds := int(duration.Seconds())
+	if seconds < 60 {
+		sendMessage(s, m, "Interval must be at least **1 minute** to avoid Discord API rate limits.")
+		return
+	}
+
+	cfg.Auto.Interval = seconds
 	config.SaveConfig(cfg)
-	sendMessage(s, m, fmt.Sprintf("Interval set to %d seconds", interval))
+	sendMessage(s, m, fmt.Sprintf("Interval set to **%s**", formatDuration(duration)))
+}
+
+// parseDuration parses human-readable duration like "1h30m", "2d12h", "30m", "90s"
+func parseDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty string")
+	}
+
+	var total time.Duration
+	current := ""
+
+	for _, ch := range s {
+		if ch >= '0' && ch <= '9' {
+			current += string(ch)
+		} else if ch == 'y' || ch == 'Y' {
+			if current == "" {
+				return 0, fmt.Errorf("missing number before 'y'")
+			}
+			n, err := fmt.Sscanf(current, "%d", new(int))
+			if n != 1 || err != nil {
+				return 0, fmt.Errorf("invalid number")
+			}
+			var num int
+			fmt.Sscanf(current, "%d", &num)
+			total += time.Duration(num) * 365 * 24 * time.Hour
+			current = ""
+		} else if ch == 'M' {
+			if current == "" {
+				return 0, fmt.Errorf("missing number before 'M'")
+			}
+			var num int
+			fmt.Sscanf(current, "%d", &num)
+			total += time.Duration(num) * 30 * 24 * time.Hour
+			current = ""
+		} else if ch == 'd' || ch == 'D' {
+			if current == "" {
+				return 0, fmt.Errorf("missing number before 'd'")
+			}
+			var num int
+			fmt.Sscanf(current, "%d", &num)
+			total += time.Duration(num) * 24 * time.Hour
+			current = ""
+		} else if ch == 'h' || ch == 'H' {
+			if current == "" {
+				return 0, fmt.Errorf("missing number before 'h'")
+			}
+			var num int
+			fmt.Sscanf(current, "%d", &num)
+			total += time.Duration(num) * time.Hour
+			current = ""
+		} else if ch == 'm' {
+			if current == "" {
+				return 0, fmt.Errorf("missing number before 'm'")
+			}
+			var num int
+			fmt.Sscanf(current, "%d", &num)
+			total += time.Duration(num) * time.Minute
+			current = ""
+		} else if ch == 's' || ch == 'S' {
+			if current == "" {
+				return 0, fmt.Errorf("missing number before 's'")
+			}
+			var num int
+			fmt.Sscanf(current, "%d", &num)
+			total += time.Duration(num) * time.Second
+			current = ""
+		} else {
+			return 0, fmt.Errorf("invalid character: %c", ch)
+		}
+	}
+
+	// If no unit specified, assume seconds
+	if current != "" {
+		var num int
+		fmt.Sscanf(current, "%d", &num)
+		total += time.Duration(num) * time.Second
+	}
+
+	if total <= 0 {
+		return 0, fmt.Errorf("duration must be positive")
+	}
+
+	return total, nil
+}
+
+// formatDuration formats duration to human-readable string
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+
+	parts := []string{}
+	seconds := int(d.Seconds())
+
+	if seconds >= 86400 {
+		days := seconds / 86400
+		parts = append(parts, fmt.Sprintf("%dd", days))
+		seconds %= 86400
+	}
+	if seconds >= 3600 {
+		hours := seconds / 3600
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+		seconds %= 3600
+	}
+	if seconds >= 60 {
+		minutes := seconds / 60
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+		seconds %= 60
+	}
+	if seconds > 0 && len(parts) == 0 {
+		parts = append(parts, fmt.Sprintf("%ds", seconds))
+	}
+
+	return strings.Join(parts, "")
 }
 
 func handleToggle(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, target string) {
