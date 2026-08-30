@@ -368,8 +368,6 @@ func sendConfig(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Co
 		bannerStatus,
 		formatDuration(time.Duration(cfg.Auto.Interval)*time.Second),
 		cfg.Konachan.Rating,
-		cfg.Auto.Interval/60,
-		cfg.Konachan.Rating,
 		cfg.Konachan.MinScore,
 		m.GuildID)
 

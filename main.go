@@ -92,8 +92,11 @@ func main() {
 		slog.String("banner_tags", cfg.Konachan.BannerTags),
 	)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	if cfg.Auto.IconEnabled || cfg.Auto.BannerEnabled {
-		go handlers.AutoChangeLoop(context.TODO(), dg, env.GuildID, cfg, konachanClient, zerochanClient, wallhavenClient)
+		go handlers.AutoChangeLoop(ctx, dg, env.GuildID, cfg, konachanClient, zerochanClient, wallhavenClient)
 	}
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
@@ -102,6 +105,7 @@ func main() {
 	<-sc
 
 	fmt.Println("\nShutting down bot...")
+	cancel() // Stop auto change loop
 	dg.Close()
 	time.Sleep(2 * time.Second)
 }
