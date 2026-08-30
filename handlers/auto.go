@@ -19,7 +19,7 @@ func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
 
-func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient) {
+func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
 	interval := time.Duration(cfg.Auto.Interval) * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -27,6 +27,7 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 	slog.Info("Auto change loop started",
 		slog.Duration("interval", interval),
 		slog.Bool("banner", cfg.Auto.BannerEnabled),
+		slog.String("source", cfg.Source),
 	)
 
 	for {
@@ -36,24 +37,36 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 			return
 		case <-ticker.C:
 			if cfg.Auto.BannerEnabled {
-				changeBanner(s, guildID, cfg, kc)
+				changeBanner(s, guildID, cfg, kc, zc)
 			}
 		}
 	}
 }
 
-func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient) {
+func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
 	slog.Info("Changing server icon...")
 
-	iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
+	var imgURL string
 
-	img, err := iconKC.GetRandomImage()
-	if err != nil {
-		slog.Error("Failed to fetch icon image", slog.Any("error", err))
-		return
+	switch cfg.Source {
+	case "zerochan":
+		entry, err := zc.GetRandomImage()
+		if err != nil {
+			slog.Error("Failed to fetch icon from zerochan", slog.Any("error", err))
+			return
+		}
+		imgURL = entry.GetImageURL()
+	default: // konachan
+		iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
+		img, err := iconKC.GetRandomImage()
+		if err != nil {
+			slog.Error("Failed to fetch icon from konachan", slog.Any("error", err))
+			return
+		}
+		imgURL = img.FileURL
 	}
 
-	data, err := downloadImageForAuto(img.FileURL)
+	data, err := downloadImageForAuto(imgURL)
 	if err != nil {
 		slog.Error("Failed to download icon image", slog.Any("error", err))
 		return
@@ -74,21 +87,33 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *ut
 		return
 	}
 
-	slog.Info("Server icon updated", slog.Int("id", img.ID), slog.Int("score", img.Score))
+	slog.Info("Server icon updated")
 }
 
-func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient) {
+func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
 	slog.Info("Changing server banner...")
 
-	bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
+	var imgURL string
 
-	img, err := bannerKC.GetRandomImage()
-	if err != nil {
-		slog.Error("Failed to fetch banner image", slog.Any("error", err))
-		return
+	switch cfg.Source {
+	case "zerochan":
+		entry, err := zc.GetRandomImage()
+		if err != nil {
+			slog.Error("Failed to fetch banner from zerochan", slog.Any("error", err))
+			return
+		}
+		imgURL = entry.GetImageURL()
+	default: // konachan
+		bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
+		img, err := bannerKC.GetRandomImage()
+		if err != nil {
+			slog.Error("Failed to fetch banner from konachan", slog.Any("error", err))
+			return
+		}
+		imgURL = img.FileURL
 	}
 
-	data, err := downloadImageForAuto(img.FileURL)
+	data, err := downloadImageForAuto(imgURL)
 	if err != nil {
 		slog.Error("Failed to download banner image", slog.Any("error", err))
 		return
@@ -103,7 +128,7 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		return
 	}
 
-	slog.Info("Server banner updated", slog.Int("id", img.ID), slog.Int("score", img.Score))
+	slog.Info("Server banner updated")
 }
 
 func downloadImageForAuto(url string) ([]byte, error) {

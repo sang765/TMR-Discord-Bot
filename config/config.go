@@ -24,10 +24,21 @@ type KonachanConfig struct {
 	MinScore  int    `yaml:"min_score"`
 }
 
+type ZerochanConfig struct {
+	Tags string `yaml:"tags"`
+}
+
+type MoeWallsConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type Config struct {
-	Bot      BotConfig      `yaml:"bot"`
-	Auto     AutoConfig     `yaml:"auto"`
-	Konachan KonachanConfig `yaml:"konachan"`
+	Bot       BotConfig       `yaml:"bot"`
+	Auto      AutoConfig      `yaml:"auto"`
+	Source    string          `yaml:"source"` // konachan, zerochan, moewalls
+	Konachan  KonachanConfig  `yaml:"konachan"`
+	Zerochan  ZerochanConfig  `yaml:"zerochan"`
+	MoeWalls  MoeWallsConfig  `yaml:"moewalls"`
 }
 
 type EnvConfig struct {
@@ -51,11 +62,18 @@ func LoadConfig(path string) (*Config, error) {
 			BannerEnabled: true,
 			Interval:      300,
 		},
+		Source: "konachan",
 		Konachan: KonachanConfig{
 			IconTags:   "1girl",
 			BannerTags: "landscape",
 			Rating:     "s",
 			MinScore:   50,
+		},
+		Zerochan: ZerochanConfig{
+			Tags: "1girl",
+		},
+		MoeWalls: MoeWallsConfig{
+			Enabled: false,
 		},
 	}
 

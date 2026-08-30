@@ -5,11 +5,13 @@ bot:
   prefix: "!"
   status: "TMR Auto Server"
 
+# Image Source: konachan, zerochan
+source: "konachan"
+
 # Auto Server Settings
 auto:
-  # Auto change server icon (requires boost level 1+)
-  icon_enabled: true
   # Auto change server banner (requires boost level 2+)
+  # Icon is now manual only via !seticon
   banner_enabled: true
   # Interval in seconds between each auto change (minimum 60)
   interval: 300
@@ -24,3 +26,14 @@ konachan:
   rating: "s"
   # Minimum score (0 = disabled)
   min_score: 30
+
+# ZeroChan API Settings (zerochan.net)
+# Note: Requires User-Agent header with project name and username
+zerochan:
+  # Tags for filtering (Title Case with spaces)
+  tags: "1girl"
+
+# MoeWalls Settings (moewalls.com)
+# Note: Requires ffmpeg for video to GIF conversion
+moewalls:
+  enabled: false

@@ -54,6 +54,7 @@ func main() {
 	}
 
 	konachanClient := utils.NewKonachanClient("", cfg.Konachan.Rating, cfg.Konachan.MinScore)
+	zerochanClient := utils.NewZerochanClient("", "TMR-Discord-Bot", "tmr-bot")
 
 	dg, err := discordgo.New("Bot " + env.DiscordToken)
 	if err != nil {
@@ -69,11 +70,11 @@ func main() {
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		handlers.MessageHandler(s, m, cfg, konachanClient, env.GuildID)
+		handlers.MessageHandler(s, m, cfg, konachanClient, zerochanClient, env.GuildID)
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		handlers.InteractionHandler(s, i, cfg, konachanClient, env.GuildID)
+		handlers.InteractionHandler(s, i, cfg, konachanClient, zerochanClient, env.GuildID)
 	})
 
 	err = dg.Open()
@@ -91,7 +92,7 @@ func main() {
 	)
 
 	if cfg.Auto.IconEnabled || cfg.Auto.BannerEnabled {
-		go handlers.AutoChangeLoop(context.TODO(), dg, env.GuildID, cfg, konachanClient)
+		go handlers.AutoChangeLoop(context.TODO(), dg, env.GuildID, cfg, konachanClient, zerochanClient)
 	}
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
