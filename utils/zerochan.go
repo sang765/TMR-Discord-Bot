@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -162,8 +163,12 @@ func (c *ZerochanEntry) GetImageURL() string {
 
 	// Construct full image URL from tag and ID
 	// Format: https://static.zerochan.net/{Tag}.full.{ID}.jpg
+	// Tag needs URL encoding for special chars like (, ), spaces
 	if c.Tag != "" && c.ID > 0 {
-		return fmt.Sprintf("https://static.zerochan.net/%s.full.%d.jpg", c.Tag, c.ID)
+		encodedTag := url.PathEscape(c.Tag)
+		// Replace spaces with dots for ZeroChan URL format
+		encodedTag = strings.ReplaceAll(encodedTag, " ", ".")
+		return fmt.Sprintf("https://static.zerochan.net/%s.full.%d.jpg", encodedTag, c.ID)
 	}
 
 	// Use thumbnail as fallback
