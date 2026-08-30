@@ -32,13 +32,18 @@ type MoeWallsConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+type WallhavenConfig struct {
+	Tags string `yaml:"tags"`
+}
+
 type Config struct {
-	Bot      BotConfig      `yaml:"bot"`
-	Auto     AutoConfig     `yaml:"auto"`
-	Source   string         `yaml:"source"` // konachan, zerochan, moewalls
-	Konachan KonachanConfig `yaml:"konachan"`
-	Zerochan ZerochanConfig `yaml:"zerochan"`
-	MoeWalls MoeWallsConfig `yaml:"moewalls"`
+	Bot       BotConfig       `yaml:"bot"`
+	Auto      AutoConfig      `yaml:"auto"`
+	Source    string          `yaml:"source"` // konachan, zerochan, wallhaven
+	Konachan  KonachanConfig  `yaml:"konachan"`
+	Zerochan  ZerochanConfig  `yaml:"zerochan"`
+	Wallhaven WallhavenConfig `yaml:"wallhaven"`
+	MoeWalls  MoeWallsConfig  `yaml:"moewalls"`
 
 	// Internal: path to save config
 	configPath string `yaml:"-"`

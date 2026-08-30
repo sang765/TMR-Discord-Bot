@@ -19,7 +19,7 @@ func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
 
-func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
+func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient) {
 	lastInterval := cfg.Auto.Interval
 	interval := time.Duration(lastInterval) * time.Second
 	ticker := time.NewTicker(interval)
@@ -38,7 +38,7 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 			return
 		case <-ticker.C:
 			if cfg.Auto.BannerEnabled {
-				changeBanner(s, guildID, cfg, kc, zc)
+				changeBanner(s, guildID, cfg, kc, zc, whc)
 			}
 		}
 
@@ -99,7 +99,7 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *ut
 	slog.Info("Server icon updated")
 }
 
-func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
+func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient) {
 	slog.Info("Changing server banner...")
 
 	var imgURL string
@@ -114,6 +114,17 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		imgURL = entry.GetImageURL()
 		if imgURL == "" {
 			slog.Error("No valid image URL from zerochan")
+			return
+		}
+	case "wallhaven":
+		entry, err := whc.GetRandomImage()
+		if err != nil {
+			slog.Error("Failed to fetch banner from wallhaven", slog.Any("error", err))
+			return
+		}
+		imgURL = entry.GetImageURL()
+		if imgURL == "" {
+			slog.Error("No valid image URL from wallhaven")
 			return
 		}
 	default: // konachan

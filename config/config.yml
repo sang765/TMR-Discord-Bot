@@ -33,6 +33,12 @@ zerochan:
   # Tags for filtering (Title Case with spaces)
   tags: "1girl"
 
+# Wallhaven API Settings (wallhaven.cc)
+# Note: Only anime category images
+wallhaven:
+  # Tags for filtering (optional)
+  tags: ""
+
 # MoeWalls Settings (moewalls.com)
 # Note: Requires ffmpeg for video to GIF conversion
 moewalls:
