@@ -143,7 +143,14 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		return
 	}
 
-	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
+	// Compress if over 10MB limit
+	compressed, err := utils.CompressToUnderLimit(data)
+	if err != nil {
+		slog.Error("Failed to compress banner image", slog.Any("error", err))
+		return
+	}
+
+	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
