@@ -17,12 +17,11 @@ const (
 	moewallsBaseURL     = "https://moewalls.com"
 	moewallsAnimeURL    = moewallsBaseURL + "/category/anime/"
 	moewallsGameURL     = moewallsBaseURL + "/category/game/"
-	maxPagesAnime       = 285 // Anime category pages
-	maxPagesGame        = 50  // Game category pages (smaller)
 )
 
 type MoeWallsClient struct {
 	httpClient *http.Client
+	maxPages   map[string]int // Cache max pages per category
 }
 
 type MoeWallsEntry struct {
@@ -37,7 +36,58 @@ func NewMoeWallsClient() *MoeWallsClient {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		maxPages: make(map[string]int),
 	}
+}
+
+// getMaxPages returns the max pages for a category (with caching)
+func (mc *MoeWallsClient) getMaxPages(categoryURL string) int {
+	// Check cache first
+	if maxPages, ok := mc.maxPages[categoryURL]; ok {
+		return maxPages
+	}
+
+	// Detect max pages from the category page
+	maxPages := mc.detectMaxPages(categoryURL)
+	mc.maxPages[categoryURL] = maxPages
+	return maxPages
+}
+
+// detectMaxPages scrapes the last page number from a category page
+func (mc *MoeWallsClient) detectMaxPages(categoryURL string) int {
+	req, err := http.NewRequest("GET", categoryURL, nil)
+	if err != nil {
+		return 50 // Default fallback
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	resp, err := mc.httpClient.Do(req)
+	if err != nil {
+		return 50 // Default fallback
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 50
+	}
+
+	// Look for pagination links like /category/anime/page/285/
+	re := regexp.MustCompile(`/page/(\d+)/`)
+	matches := re.FindAllStringSubmatch(string(body), -1)
+	
+	maxPage := 1
+	for _, match := range matches {
+		if len(match) >= 2 {
+			pageNum, err := strconv.Atoi(match[1])
+			if err == nil && pageNum > maxPage {
+				maxPage = pageNum
+			}
+		}
+	}
+
+	fmt.Printf("[MoeWalls] Detected max pages for %s: %d\n", categoryURL, maxPage)
+	return maxPage
 }
 
 // GetRandomVideo downloads a random anime video from MoeWalls
@@ -57,15 +107,16 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 
 	// Step 1: Randomly pick category (80% anime, 20% game)
 	categoryURL := moewallsAnimeURL
-	maxPages := maxPagesAnime
 	categoryName := "anime"
 	if rand.Intn(100) < 20 { // 20% chance for game
 		categoryURL = moewallsGameURL
-		maxPages = maxPagesGame
 		categoryName = "game"
 	}
 
-	// Step 2: Get random page
+	// Step 2: Get max pages for this category (cached)
+	maxPages := mc.getMaxPages(categoryURL)
+
+	// Step 3: Get random page
 	pageNum := rand.Intn(maxPages) + 1
 	var pageURL string
 	if pageNum == 1 {
@@ -279,7 +330,8 @@ func (mc *MoeWallsClient) downloadVideo(url string) ([]byte, error) {
 
 // GetRandomPage returns a random page number for MoeWalls (anime category)
 func (mc *MoeWallsClient) GetRandomPage() int {
-	return rand.Intn(maxPagesAnime) + 1
+	maxPages := mc.getMaxPages(moewallsAnimeURL)
+	return rand.Intn(maxPages) + 1
 }
 
 // contains checks if a string slice contains a specific string
