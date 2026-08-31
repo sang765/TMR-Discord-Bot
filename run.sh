@@ -56,14 +56,13 @@ if [ ! -f "./tmr-bot" ]; then
         rm /tmp/go.tar.gz
     fi
 
-    # Install ffmpeg if not present
-    if [ ! -f "/home/container/ffmpeg" ]; then
+    # Install ffmpeg if not present (extract only binary, not models)
+    if ! command -v ffmpeg &> /dev/null && [ ! -f "/home/container/ffmpeg" ]; then
         echo "Installing ffmpeg..."
         wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -O /tmp/ffmpeg.tar.xz
-        tar -xf /tmp/ffmpeg.tar.xz -C /tmp
-        cp /tmp/ffmpeg-*-amd64-static/ffmpeg /home/container/ffmpeg
+        tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffmpeg' --strip-components=1 -C /home/container/
         chmod +x /home/container/ffmpeg
-        rm -rf /tmp/ffmpeg*
+        rm -f /tmp/ffmpeg.tar.xz
     fi
 
     export PATH=/home/container:$PATH
