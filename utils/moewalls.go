@@ -124,7 +124,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	} else {
 		pageURL = fmt.Sprintf("%s/page/%d/", categoryURL, pageNum)
 	}
-	updateStatus(fmt.Sprintf("📡 Fetching %s page %d...", categoryName, pageNum))
+	updateStatus(fmt.Sprintf("📡 **Category:** %s (%d pages)\n🔗 **Page:** %s", categoryName, maxPages, pageURL))
 
 	// Step 2: Scrape list page to get wallpaper URLs
 	wallpaperURLs, err := mc.scrapeListPage(pageURL)
@@ -139,7 +139,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	// Step 3: Pick random wallpaper
 	randomIdx := rand.Intn(len(wallpaperURLs))
 	wallpaperURL := wallpaperURLs[randomIdx]
-	updateStatus(fmt.Sprintf("🎲 Picked wallpaper %d/%d", randomIdx+1, len(wallpaperURLs)))
+	updateStatus(fmt.Sprintf("🎲 Picked wallpaper %d/%d\n🔗 **URL:** %s", randomIdx+1, len(wallpaperURLs), wallpaperURL))
 
 	// Step 4: Scrape individual page to get video URL
 	updateStatus("🔍 Finding video URL...")
@@ -147,7 +147,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get video URL: %w", err)
 	}
-	updateStatus("✅ Video URL found")
+	updateStatus(fmt.Sprintf("✅ Video URL found\n🔗 **Video:** %s", videoURL))
 
 	// Step 5: Download video
 	updateStatus("⬇️ Downloading video...")
