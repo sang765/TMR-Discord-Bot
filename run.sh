@@ -61,7 +61,8 @@ if [ ! -f "./tmr-bot" ]; then
         echo "Installing ffmpeg..."
         wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -O /tmp/ffmpeg.tar.xz
         tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffmpeg' --strip-components=1 -C /home/container/
-        chmod +x /home/container/ffmpeg
+        tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffprobe' --strip-components=1 -C /home/container/
+        chmod +x /home/container/ffmpeg /home/container/ffprobe
         rm -f /tmp/ffmpeg.tar.xz
     fi
 
