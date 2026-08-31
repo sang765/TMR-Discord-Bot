@@ -16,7 +16,7 @@ import (
 const (
 	moewallsBaseURL     = "https://moewalls.com"
 	moewallsAnimeURL    = moewallsBaseURL + "/category/anime/"
-	moewallsGameURL     = moewallsBaseURL + "/category/game/"
+	moewallsGameURL     = moewallsBaseURL + "/category/games/"
 )
 
 type MoeWallsClient struct {
