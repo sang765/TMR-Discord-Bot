@@ -23,6 +23,9 @@ func main() {
 		slog.Warn("No .env file found")
 	}
 
+	// Clean up temp files from previous runs
+	utils.CleanupTempFiles()
+
 	env := config.LoadEnv()
 	if env.DiscordToken == "" {
 		log.Fatal("DISCORD_TOKEN is required")

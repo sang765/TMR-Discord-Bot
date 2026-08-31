@@ -14,6 +14,28 @@ import (
 	"strings"
 )
 
+// CleanupTempFiles removes leftover temp files from previous runs
+func CleanupTempFiles() {
+	patterns := []string{
+		"/tmp/moewalls-*",
+		"/tmp/moe-input-*",
+		"/tmp/moe-output-*",
+		"/tmp/moewalls-probe-*",
+		"/tmp/moewalls-info-*",
+		"/tmp/moewalls-frame-*",
+	}
+	
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			continue
+		}
+		for _, f := range matches {
+			os.Remove(f)
+		}
+	}
+}
+
 // getFFmpegPath returns the path to ffmpeg binary
 // Checks local directory first, then falls back to system ffmpeg
 func getFFmpegPath() string {
