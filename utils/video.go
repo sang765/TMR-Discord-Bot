@@ -44,7 +44,7 @@ func getFFprobePath() string {
 
 // findBestLoopPoint analyzes video and finds where frame matches the first frame
 // Returns the duration (seconds) to cut the video for optimal looping
-// Uses 2-pass: coarse scan (0.2s) then fine scan (0.05s) around best match
+// Uses 2-pass: coarse scan (0.2s) then fine scan (0.02s) around best match
 func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 	// Get video duration first
 	duration := getVideoDuration(data)
@@ -58,11 +58,17 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 		return duration
 	}
 	
-	// Pass 1: Coarse scan every 0.2s
+	// Skip first 20% of video to avoid finding near-start frames
+	minSearchTime := duration * 0.2
+	if minSearchTime < 0.5 {
+		minSearchTime = 0.5
+	}
+	
+	// Pass 1: Coarse scan every 0.2s (skip early frames)
 	bestCoarseTime := duration
 	bestCoarseSim := 1.0
 	
-	for t := 0.2; t < duration-0.2; t += 0.2 {
+	for t := minSearchTime; t < duration-0.2; t += 0.2 {
 		frame := extractFrameAt(data, t)
 		if frame == nil {
 			continue
@@ -81,8 +87,8 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 	
 	// Pass 2: Fine scan around best coarse match (±0.2s, step 0.02s)
 	startTime := bestCoarseTime - 0.2
-	if startTime < 0.05 {
-		startTime = 0.05
+	if startTime < minSearchTime {
+		startTime = minSearchTime
 	}
 	endTime := bestCoarseTime + 0.2
 	if endTime >= duration {
@@ -148,7 +154,7 @@ func getVideoInfo(data []byte) (width, height int, codec string) {
 		"-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=width,height,codec_name",
-		"-of", "csv=p=0",
+		"-of", "csv=p=0:s=x",
 		"pipe:0",
 	)
 
@@ -158,11 +164,27 @@ func getVideoInfo(data []byte) (width, height int, codec string) {
 		return 0, 0, "unknown"
 	}
 
-	parts := strings.Split(strings.TrimSpace(string(out)), ",")
+	output := strings.TrimSpace(string(out))
+	
+	// Try different formats
+	// Format 1: "width x height x codec" (with =x separator)
+	if strings.Contains(output, "x") {
+		parts := strings.Split(output, "x")
+		if len(parts) >= 3 {
+			width, _ = strconv.Atoi(parts[0])
+			height, _ = strconv.Atoi(parts[1])
+			codec = parts[2]
+			return
+		}
+	}
+	
+	// Format 2: "width,height,codec" (comma separated)
+	parts := strings.Split(output, ",")
 	if len(parts) >= 3 {
-		width, _ = strconv.Atoi(parts[0])
-		height, _ = strconv.Atoi(parts[1])
-		codec = parts[2]
+		width, _ = strconv.Atoi(strings.TrimSpace(parts[0]))
+		height, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
+		codec = strings.TrimSpace(parts[2])
+		return
 	}
 
 	return width, height, codec
