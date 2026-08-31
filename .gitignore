@@ -28,4 +28,7 @@ Thumbs.db
 
 #build file
 *.exe
-tmr-bot.omo/
+tmr-bot
+
+# Oh My OpenAgent (??? bro)
+.omo/
