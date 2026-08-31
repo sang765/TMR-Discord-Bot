@@ -295,6 +295,18 @@ func VideoToCompressedGIF(data []byte, maxBytes int) ([]byte, error) {
 		return nil, fmt.Errorf("ffmpeg not installed")
 	}
 
+	// Validate video data first
+	if len(data) < 100 {
+		return nil, fmt.Errorf("video data too small (%d bytes), likely corrupted", len(data))
+	}
+
+	// Check if it's a valid video file (skip first 4KB for container header)
+	// Look for ftyp, moov, or RIFF markers
+	header := string(data[:min(4096, len(data))])
+	if !strings.Contains(header, "ftyp") && !strings.Contains(header, "moov") && !strings.Contains(header, "RIFF") && !strings.Contains(header, "webm") {
+		return nil, fmt.Errorf("invalid video format (no ftyp/moov/RIFF marker)")
+	}
+
 	// Optimize loop point for better GIF looping
 	loopDuration := findBestLoopPoint(data, 8.0) // Max 8 seconds for GIF
 	if loopDuration < 2.0 {
@@ -332,10 +344,16 @@ func VideoToCompressedGIF(data []byte, maxBytes int) ([]byte, error) {
 
 		cmd.Stdin = bytes.NewReader(data)
 		var out bytes.Buffer
+		var stderr bytes.Buffer
 		cmd.Stdout = &out
-		cmd.Stderr = &bytes.Buffer{}
+		cmd.Stderr = &stderr
 
 		if err := cmd.Run(); err != nil {
+			// Log error for debugging
+			fmt.Printf("[GIF] Quality %s/%s failed: %v\n", q.fps, q.scale, err)
+			if stderr.Len() > 0 {
+				fmt.Printf("[GIF] stderr: %s\n", stderr.String()[:min(500, stderr.Len())])
+			}
 			continue
 		}
 
@@ -356,11 +374,12 @@ func VideoToCompressedGIF(data []byte, maxBytes int) ([]byte, error) {
 
 	cmd.Stdin = bytes.NewReader(data)
 	var out bytes.Buffer
+	var stderr bytes.Buffer
 	cmd.Stdout = &out
-	cmd.Stderr = &bytes.Buffer{}
+	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("gif conversion failed: %w", err)
+		return nil, fmt.Errorf("gif conversion failed: %w\nstderr: %s", err, stderr.String())
 	}
 
 	return out.Bytes(), nil
