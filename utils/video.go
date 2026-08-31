@@ -18,11 +18,13 @@ import (
 func CleanupTempFiles() {
 	patterns := []string{
 		"/tmp/moewalls-*",
+		"/tmp/moewalls_*.mp4",
 		"/tmp/moe-input-*",
 		"/tmp/moe-output-*",
 		"/tmp/moewalls-probe-*",
 		"/tmp/moewalls-info-*",
 		"/tmp/moewalls-frame-*",
+		"/tmp/moewalls-*.gif",
 	}
 	
 	for _, pattern := range patterns {
