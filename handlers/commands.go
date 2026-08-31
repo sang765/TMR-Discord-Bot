@@ -178,7 +178,7 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 		}
 	case "moewalls":
 		msgID := sendMessageWithID(s, m, "🎬 Fetching random icon from MoeWalls...")
-		gifData, _, e := mwc.GetRandomVideoWithStatus(func(status string) {
+		result, e := mwc.GetRandomVideoWithStatus(func(status string) {
 			editMessage(s, m, msgID, status)
 		})
 		if e != nil {
@@ -186,11 +186,11 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 			return
 		}
 		editMessage(s, m, msgID, "⬆️ Uploading to Discord...")
-		if err := setAnimatedIcon(s, m, gifData, guildID); err != nil {
+		if err := setAnimatedIcon(s, m, result.GIFData, guildID); err != nil {
 			editMessage(s, m, msgID, fmt.Sprintf("❌ Error setting icon: %v", err))
 			return
 		}
-		editMessage(s, m, msgID, "✅ Icon updated!")
+		editMessage(s, m, msgID, fmt.Sprintf("✅ Icon updated!\n🔗 **Wallpaper:** %s\n🔗 **Video:** %s", result.WallpaperURL, result.VideoURL))
 	default: // konachan
 		iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, e := iconKC.GetRandomImage()
@@ -243,7 +243,7 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 		}
 	case "moewalls":
 		msgID := sendMessageWithID(s, m, "🎬 Fetching random banner from MoeWalls...")
-		gifData, _, e := mwc.GetRandomVideoWithStatus(func(status string) {
+		result, e := mwc.GetRandomVideoWithStatus(func(status string) {
 			editMessage(s, m, msgID, status)
 		})
 		if e != nil {
@@ -251,11 +251,11 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 			return
 		}
 		editMessage(s, m, msgID, "⬆️ Uploading to Discord...")
-		if err := setAnimatedBanner(s, m, gifData, guildID); err != nil {
+		if err := setAnimatedBanner(s, m, result.GIFData, guildID); err != nil {
 			editMessage(s, m, msgID, fmt.Sprintf("❌ Error setting banner: %v", err))
 			return
 		}
-		editMessage(s, m, msgID, "✅ Banner updated!")
+		editMessage(s, m, msgID, fmt.Sprintf("✅ Banner updated!\n🔗 **Wallpaper:** %s\n🔗 **Video:** %s", result.WallpaperURL, result.VideoURL))
 	default: // konachan
 		bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, e := bannerKC.GetRandomImage()

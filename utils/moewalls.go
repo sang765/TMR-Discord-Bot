@@ -90,14 +90,31 @@ func (mc *MoeWallsClient) detectMaxPages(categoryURL string) int {
 	return maxPage
 }
 
+// MoeWallsResult contains the result of getting a random video
+type MoeWallsResult struct {
+	GIFData      []byte
+	Compressed   bool
+	WallpaperURL string
+	VideoURL     string
+}
+
 // GetRandomVideo downloads a random anime video from MoeWalls
 // Returns the video bytes and whether it was compressed
 func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
+	result, err := mc.GetRandomVideoWithStatus(nil)
+	if err != nil {
+		return nil, false, err
+	}
+	return result.GIFData, result.Compressed, nil
+}
+
+// GetRandomVideoDetailed downloads a random anime video and returns full result
+func (mc *MoeWallsClient) GetRandomVideoDetailed() (*MoeWallsResult, error) {
 	return mc.GetRandomVideoWithStatus(nil)
 }
 
 // GetRandomVideoWithStatus downloads a random anime video with status callback
-func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]byte, bool, error) {
+func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) (*MoeWallsResult, error) {
 	updateStatus := func(msg string) {
 		fmt.Printf("[MoeWalls] %s\n", msg)
 		if statusFunc != nil {
@@ -129,10 +146,10 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	// Step 4: Scrape list page to get wallpaper URLs
 	wallpaperURLs, err := mc.scrapeListPage(pageURL)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to scrape list page: %w", err)
+		return nil, fmt.Errorf("failed to scrape list page: %w", err)
 	}
 	if len(wallpaperURLs) == 0 {
-		return nil, false, fmt.Errorf("no wallpapers found on page %d", pageNum)
+		return nil, fmt.Errorf("no wallpapers found on page %d", pageNum)
 	}
 	updateStatus(fmt.Sprintf("📋 Found %d wallpapers", len(wallpaperURLs)))
 
@@ -145,7 +162,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	updateStatus("🔍 Finding video URL...")
 	videoURL, err := mc.scrapeVideoURL(wallpaperURL)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get video URL: %w", err)
+		return nil, fmt.Errorf("failed to get video URL: %w", err)
 	}
 	updateStatus(fmt.Sprintf("✅ Video URL found\n🔗 **Video:** %s", videoURL))
 
@@ -154,7 +171,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	updateStatus("⬇️ Downloading video...")
 	videoData, err := mc.downloadVideo(videoURL)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to download video: %w", err)
+		return nil, fmt.Errorf("failed to download video: %w", err)
 	}
 	downloadTime := time.Since(startDownload).Seconds()
 	downloadSize := len(videoData) / 1024
@@ -188,7 +205,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	updateStatus("🎬 Converting to GIF...")
 	compressed, err := VideoToCompressedGIF(resized, maxBannerSizeAnimated)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to convert to GIF: %w", err)
+		return nil, fmt.Errorf("failed to convert to GIF: %w", err)
 	}
 	convertTime := time.Since(startConvert).Seconds()
 	compressedSize := len(compressed) / 1024
@@ -206,7 +223,12 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	// Check if compression was applied
 	wasCompressed := len(compressed) < len(resized)
 
-	return compressed, wasCompressed, nil
+	return &MoeWallsResult{
+		GIFData:      compressed,
+		Compressed:   wasCompressed,
+		WallpaperURL: wallpaperURL,
+		VideoURL:     videoURL,
+	}, nil
 }
 
 // scrapeListPage extracts wallpaper URLs from a list page
