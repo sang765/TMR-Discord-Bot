@@ -1,39 +1,51 @@
 # TMR Discord Bot
 
-Discord bot auto thay đổi server banner từ [konachan.net](https://konachan.net) và [zerochan.net](https://zerochan.net)
+Discord bot auto thay đổi server banner và icon từ các nguồn ảnh anime.
+
+## Nguồn ảnh
+
+| Nguồn | Loại | Ghi chú |
+|-------|------|---------|
+| [konachan.net](https://konachan.net) | Ảnh tĩnh | Hỗ trợ tags, rating, score |
+| [zerochan.net](https://zerochan.net) | Ảnh tĩnh | Hỗ trợ tags |
+| [wallhaven.cc](https://wallhaven.cc) | Ảnh tĩnh | Hỗ trợ tags, purity, sorting |
+| [moewalls.com](https://moewalls.com) | Video → GIF | Animated banner/icon, 1920x1080, ≤10MB |
 
 ## Tính năng
 
-- Auto thay đổi server banner (Boost Level 2+)
-- Random ảnh anime từ konachan.net hoặc zerochan.net
-- Hỗ trợ MoeWalls (video → GIF cho animated icon/banner)
-- Prefix commands (`!`)
-- Slash commands
-- Config file YAML
-- Lọc theo tags, rating, score
-- Permission check: Chỉ Manage Server hoặc Administrator mới dùng được
+- Auto thay đổi server banner và icon (Boost Level 2+)
+- Random ảnh/video từ 4 nguồn
+- Hỗ trợ animated banner/icon (video → GIF via ffmpeg)
+- Interval tuỳ chỉnh (hỗ trợ: `30m`, `1h30m`, `2d12h`)
+- Live status updates khi đang xử lý
+- Permission check: Chỉ Manage Server hoặc Administrator
+- Config file YAML tự lưu khi thay đổi
 
 ## Commands
 
 | Command | Mô tả |
 |---------|-------|
 | `!help` | Hiển thị danh sách commands |
-| `!seticon` | Set icon ngẫu nhiên từ source hiện tại |
 | `!setbanner` | Set banner ngẫu nhiên từ source hiện tại |
+| `!seticon` | Set icon ngẫu nhiên từ source hiện tại |
 | `!boost` | Kiểm tra boost level server |
 | `!config` | Xem cấu hình bot |
-| `!interval <seconds>` | Đặt interval auto change |
-| `!source <konachan\|zerochan>` | Chọn image source |
-| `!toggle icon/banner` | Bật/tắt auto change |
+| `!interval <value>` | Đặt interval auto change (vd: `30m`, `1h30m`, `2d`) |
+| `!source <name>` | Chọn image source: `konachan`, `zerochan`, `wallhaven`, `moewalls` |
+| `!toggle icon\|banner` | Bật/tắt auto change |
 | `!toggleautoicon` | Toggle auto icon (alias) |
 | `!toggleautobanner` | Toggle auto banner (alias) |
+| `!setprefix <char>` | Đặt prefix mới |
+| `!setstatus <text>` | Đặt bot status |
+| `!setrating <s\|q\|e>` | Đặt rating filter (konachan) |
+| `!setscore <number>` | Đặt min score filter (konachan) |
 
 ## Setup
 
 ### 1. Clone repo
 
 ```bash
-git clone https://github.com/your-username/TMR-Discord-Bot.git
+git clone https://github.com/sang765/TMR-Discord-Bot.git
 cd TMR-Discord-Bot
 ```
 
@@ -42,9 +54,10 @@ cd TMR-Discord-Bot
 ```env
 DISCORD_TOKEN=your_bot_token_here
 GUILD_ID=your_server_id_here
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx  # Cần cho private repo (Pterodactyl)
 ```
 
-### 3. Config (tùy chọn)
+### 3. Config
 
 Chỉnh sửa `config/config.yml`:
 
@@ -53,12 +66,13 @@ bot:
   prefix: "!"
   status: "TMR Auto Server"
 
-# Image source: konachan, zerochan
+# Nguồn ảnh: konachan, zerochan, wallhaven, moewalls
 source: "konachan"
 
 auto:
   banner_enabled: true
-  interval: 300  # giây
+  icon_enabled: false
+  interval: 1800  # giây (30 phút)
 
 konachan:
   icon_tags: "1girl"
@@ -69,11 +83,29 @@ konachan:
 zerochan:
   tags: "1girl"
 
+wallhaven:
+  tags: "landscape"
+  purity: "100"  # 100=SFW, 010=Sketchy, 001=NSFW
+  sorting: "random"
+
 moewalls:
-  enabled: false  # Cần ffmpeg cho video → GIF
+  enabled: true  # Cần ffmpeg
 ```
 
-### 4. Chạy bot
+### 4. Cài ffmpeg (cho MoeWalls)
+
+```bash
+# Debian/Ubuntu
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Arch
+sudo pacman -S ffmpeg
+```
+
+### 5. Chạy bot
 
 **Local:**
 ```bash
@@ -81,16 +113,11 @@ go build -o tmr-bot .
 ./tmr-bot
 ```
 
-**Docker:**
-```bash
-docker build -t tmr-bot .
-docker run -d --name tmr-bot --env-file .env tmr-bot
-```
-
 **Pterodactyl:**
 - Upload tất cả file lên server
+- Thêm `GITHUB_TOKEN` vào `.env` (nếu repo private)
 - Startup Command: `bash run.sh`
-- Bot sẽ tự compile trên server
+- Bot sẽ tự download Go, ffmpeg, compile và chạy
 
 ## Invite Bot
 
@@ -100,10 +127,11 @@ https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot&permissions
 
 ## Yêu cầu
 
-- Go 1.23+
+- Go 1.25+
 - Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
-- Server Boost Level 2+ (cho banner)
-- ffmpeg (nếu dùng MoeWalls cho animated icon/banner)
+- Server Boost Level 2+ (cho animated banner)
+- ffmpeg (cho MoeWalls video → GIF)
+- GITHUB_TOKEN (cho Pterodactyl với private repo)
 
 ## License
 
