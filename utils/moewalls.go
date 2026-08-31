@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	moewallsBaseURL    = "https://moewalls.com"
-	moewallsCategoryURL = moewallsBaseURL + "/category/anime/"
-	maxPages           = 285
-	maxBannerSizeAnimated = 10 * 1024 * 1024 // 10MB
+	moewallsBaseURL     = "https://moewalls.com"
+	moewallsAnimeURL    = moewallsBaseURL + "/category/anime/"
+	moewallsGameURL     = moewallsBaseURL + "/category/game/"
+	maxPagesAnime       = 285 // Anime category pages
+	maxPagesGame        = 50  // Game category pages (smaller)
 )
 
 type MoeWallsClient struct {
@@ -54,15 +55,25 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 		}
 	}
 
-	// Step 1: Get random page
+	// Step 1: Randomly pick category (80% anime, 20% game)
+	categoryURL := moewallsAnimeURL
+	maxPages := maxPagesAnime
+	categoryName := "anime"
+	if rand.Intn(100) < 20 { // 20% chance for game
+		categoryURL = moewallsGameURL
+		maxPages = maxPagesGame
+		categoryName = "game"
+	}
+
+	// Step 2: Get random page
 	pageNum := rand.Intn(maxPages) + 1
 	var pageURL string
 	if pageNum == 1 {
-		pageURL = moewallsCategoryURL
+		pageURL = categoryURL
 	} else {
-		pageURL = fmt.Sprintf("%s/page/%d/", moewallsCategoryURL, pageNum)
+		pageURL = fmt.Sprintf("%s/page/%d/", categoryURL, pageNum)
 	}
-	updateStatus(fmt.Sprintf("📡 Fetching page %d...", pageNum))
+	updateStatus(fmt.Sprintf("📡 Fetching %s page %d...", categoryName, pageNum))
 
 	// Step 2: Scrape list page to get wallpaper URLs
 	wallpaperURLs, err := mc.scrapeListPage(pageURL)
@@ -266,9 +277,9 @@ func (mc *MoeWallsClient) downloadVideo(url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// GetRandomPage returns a random page number for MoeWalls
+// GetRandomPage returns a random page number for MoeWalls (anime category)
 func (mc *MoeWallsClient) GetRandomPage() int {
-	return rand.Intn(maxPages) + 1
+	return rand.Intn(maxPagesAnime) + 1
 }
 
 // contains checks if a string slice contains a specific string

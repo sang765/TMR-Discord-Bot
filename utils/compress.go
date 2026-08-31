@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	maxBannerSize = 10 * 1024 * 1024 // 10MB
-	startQuality  = 85
-	minQuality    = 30
+	maxBannerSize         = 10 * 1024 * 1024 // 10MB for static images
+	maxBannerSizeAnimated = 10 * 1024 * 1024 // 10MB for animated GIFs
+	startQuality          = 85
+	minQuality            = 30
 )
 
 // CompressToUnderLimit compresses JPEG image to be under maxBannerSize
