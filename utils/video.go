@@ -73,10 +73,12 @@ func VideoToCompressedGIF(data []byte, maxBytes int) ([]byte, error) {
 		scale  string
 		dither string
 	}{
-		{"15", "480:-1", "floyd_steinberg"},
-		{"10", "360:-1", "floyd_steinberg"},
-		{"8", "320:-1", "sierra2_4a"},
-		{"5", "240:-1", "none"},
+		{"30", "480:-1", "floyd_steinberg"},
+		{"25", "480:-1", "floyd_steinberg"},
+		{"20", "400:-1", "floyd_steinberg"},
+		{"15", "360:-1", "floyd_steinberg"},
+		{"10", "320:-1", "sierra2_4a"},
+		{"8", "240:-1", "none"},
 	}
 
 	for _, q := range qualities {
