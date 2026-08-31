@@ -183,11 +183,12 @@ func getVideoInfo(data []byte) (width, height int, codec string) {
 	}
 	tmpFile.Close()
 	
+	// Use JSON output for reliable parsing
 	cmd := exec.Command(ffprobePath,
 		"-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=width,height,codec_name",
-		"-of", "csv=p=0",
+		"-of", "json",
 		tmpPath,
 	)
 
@@ -196,11 +197,34 @@ func getVideoInfo(data []byte) (width, height int, codec string) {
 		return 0, 0, "unknown"
 	}
 
-	parts := strings.Split(strings.TrimSpace(string(out)), ",")
-	if len(parts) >= 3 {
-		width, _ = strconv.Atoi(strings.TrimSpace(parts[0]))
-		height, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
-		codec = strings.TrimSpace(parts[2])
+	output := string(out)
+	
+	// Simple JSON parsing for: {"streams":[{"width":1920,"height":1080,"codec_name":"h264"}]}
+	// Find "width": NNN
+	if idx := strings.Index(output, `"width":`); idx != -1 {
+		output = output[idx+8:]
+		endIdx := strings.IndexAny(output, ",}")
+		if endIdx > 0 {
+			width, _ = strconv.Atoi(strings.TrimSpace(output[:endIdx]))
+		}
+	}
+	
+	// Find "height": NNN
+	if idx := strings.Index(output, `"height":`); idx != -1 {
+		output = output[idx+9:]
+		endIdx := strings.IndexAny(output, ",}")
+		if endIdx > 0 {
+			height, _ = strconv.Atoi(strings.TrimSpace(output[:endIdx]))
+		}
+	}
+	
+	// Find "codec_name": "xxx"
+	if idx := strings.Index(output, `"codec_name":"`); idx != -1 {
+		output = output[idx+14:]
+		endIdx := strings.Index(output, `"`)
+		if endIdx > 0 {
+			codec = output[:endIdx]
+		}
 	}
 
 	return width, height, codec

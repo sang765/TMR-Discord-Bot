@@ -127,7 +127,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) (*Mo
 	categoryName := "anime"
 	if rand.Intn(100) < 20 { // 20% chance for game
 		categoryURL = moewallsGameURL
-		categoryName = "game"
+		categoryName = "games"
 	}
 
 	// Step 2: Get max pages for this category (cached)
