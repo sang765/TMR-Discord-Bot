@@ -44,7 +44,7 @@ func getFFprobePath() string {
 
 // findBestLoopPoint analyzes video and finds where frame matches the first frame
 // Returns the duration (seconds) to cut the video for optimal looping
-// Uses 2-pass: coarse scan (0.5s) then fine scan (0.1s) around best match
+// Uses 2-pass: coarse scan (0.2s) then fine scan (0.05s) around best match
 func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 	// Get video duration first
 	duration := getVideoDuration(data)
@@ -58,11 +58,11 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 		return duration
 	}
 	
-	// Pass 1: Coarse scan every 0.5s
+	// Pass 1: Coarse scan every 0.2s
 	bestCoarseTime := duration
 	bestCoarseSim := 1.0
 	
-	for t := 0.5; t < duration-0.5; t += 0.5 {
+	for t := 0.2; t < duration-0.2; t += 0.2 {
 		frame := extractFrameAt(data, t)
 		if frame == nil {
 			continue
@@ -73,26 +73,26 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 			bestCoarseSim = similarity
 			bestCoarseTime = t
 			
-			if similarity < 0.10 {
-				break // Very good match, no need to continue
+			if similarity < 0.03 { // Very strict - 3% difference
+				break
 			}
 		}
 	}
 	
-	// Pass 2: Fine scan around best coarse match (±0.5s, step 0.1s)
-	startTime := bestCoarseTime - 0.5
-	if startTime < 0.1 {
-		startTime = 0.1
+	// Pass 2: Fine scan around best coarse match (±0.2s, step 0.02s)
+	startTime := bestCoarseTime - 0.2
+	if startTime < 0.05 {
+		startTime = 0.05
 	}
-	endTime := bestCoarseTime + 0.5
+	endTime := bestCoarseTime + 0.2
 	if endTime >= duration {
-		endTime = duration - 0.1
+		endTime = duration - 0.05
 	}
 	
 	bestMatchTime := bestCoarseTime
 	bestSimilarity := bestCoarseSim
 	
-	for t := startTime; t <= endTime; t += 0.1 {
+	for t := startTime; t <= endTime; t += 0.02 {
 		frame := extractFrameAt(data, t)
 		if frame == nil {
 			continue
@@ -103,11 +103,15 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 			bestSimilarity = similarity
 			bestMatchTime = t
 			
-			if similarity < 0.05 {
-				break // Excellent match
+			if similarity < 0.01 { // Nearly identical - 1% difference
+				break
 			}
 		}
 	}
+	
+	// Log the loop point quality
+	fmt.Printf("[Loop] Best loop at %.2fs with similarity %.4f (%.2f%% diff)\n", 
+		bestMatchTime, bestSimilarity, bestSimilarity*100)
 	
 	return bestMatchTime
 }
@@ -199,14 +203,14 @@ func extractFrameAt(data []byte, timeSec float64) *image.RGBA {
 }
 
 // compareFrames calculates similarity between two frames (0 = identical, 1 = completely different)
-// Uses downscaled comparison for speed
+// Uses downscaled comparison for speed with structural similarity
 func compareFrames(a, b *image.RGBA) float64 {
 	if a == nil || b == nil {
 		return 1.0
 	}
 	
-	// Downscale to 64x64 for fast comparison
-	size := 64
+	// Downscale to 128x128 for better accuracy
+	size := 128
 	aSmall := downscaleImage(a, size)
 	bSmall := downscaleImage(b, size)
 	
@@ -214,8 +218,10 @@ func compareFrames(a, b *image.RGBA) float64 {
 		return 1.0
 	}
 	
-	// Calculate normalized MSE
+	// Calculate normalized MSE with focus on structural similarity
 	var sumDiff float64
+	var sumA float64
+	var sumB float64
 	pixels := float64(size * size * 4) // RGBA = 4 channels
 	
 	for y := 0; y < size; y++ {
@@ -229,12 +235,20 @@ func compareFrames(a, b *image.RGBA) float64 {
 			da := float64(c1.A - c2.A)
 			
 			sumDiff += dr*dr + dg*dg + db*db + da*da
+			sumA += float64(c1.R) + float64(c1.G) + float64(c1.B) + float64(c1.A)
+			sumB += float64(c2.R) + float64(c2.G) + float64(c2.B) + float64(c2.A)
 		}
 	}
 	
 	mse := sumDiff / pixels
-	// Normalize to 0-1 range (max possible diff is 255^2 = 65025)
-	return math.Sqrt(mse) / 255.0
+	
+	// Also check if overall brightness is similar
+	avgA := sumA / pixels
+	avgB := sumB / pixels
+	brightnessDiff := math.Abs(avgA-avgB) / 255.0
+	
+	// Combine MSE and brightness difference
+	return math.Sqrt(mse)/255.0*0.8 + brightnessDiff*0.2
 }
 
 // downscaleImage downscales image to target size using nearest neighbor
