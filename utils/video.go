@@ -111,7 +111,6 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 	
 	return bestMatchTime
 }
-
 // getVideoDuration extracts video duration in seconds using ffprobe
 func getVideoDuration(data []byte) float64 {
 	ffprobePath := getFFprobePath()
@@ -122,19 +121,48 @@ func getVideoDuration(data []byte) float64 {
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		"pipe:0",
 	)
+
 	cmd.Stdin = bytes.NewReader(data)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0
 	}
-	
+
 	duration, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 	if err != nil {
 		return 0
 	}
+
 	return duration
 }
 
+// getVideoInfo returns video resolution and codec info
+func getVideoInfo(data []byte) (width, height int, codec string) {
+	ffprobePath := getFFprobePath()
+	
+	cmd := exec.Command(ffprobePath,
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=width,height,codec_name",
+		"-of", "csv=p=0",
+		"pipe:0",
+	)
+
+	cmd.Stdin = bytes.NewReader(data)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, 0, "unknown"
+	}
+
+	parts := strings.Split(strings.TrimSpace(string(out)), ",")
+	if len(parts) >= 3 {
+		width, _ = strconv.Atoi(parts[0])
+		height, _ = strconv.Atoi(parts[1])
+		codec = parts[2]
+	}
+
+	return width, height, codec
+}
 // extractFrameAt extracts a single frame from video at given time
 // Returns RGBA image data
 func extractFrameAt(data []byte, timeSec float64) *image.RGBA {

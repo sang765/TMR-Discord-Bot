@@ -126,7 +126,7 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	}
 	updateStatus(fmt.Sprintf("📡 **Category:** %s (%d pages)\n🔗 **Page:** %s", categoryName, maxPages, pageURL))
 
-	// Step 2: Scrape list page to get wallpaper URLs
+	// Step 4: Scrape list page to get wallpaper URLs
 	wallpaperURLs, err := mc.scrapeListPage(pageURL)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to scrape list page: %w", err)
@@ -136,12 +136,12 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	}
 	updateStatus(fmt.Sprintf("📋 Found %d wallpapers", len(wallpaperURLs)))
 
-	// Step 3: Pick random wallpaper
+	// Step 5: Pick random wallpaper
 	randomIdx := rand.Intn(len(wallpaperURLs))
 	wallpaperURL := wallpaperURLs[randomIdx]
 	updateStatus(fmt.Sprintf("🎲 Picked wallpaper %d/%d\n🔗 **URL:** %s", randomIdx+1, len(wallpaperURLs), wallpaperURL))
 
-	// Step 4: Scrape individual page to get video URL
+	// Step 6: Scrape individual page to get video URL
 	updateStatus("🔍 Finding video URL...")
 	videoURL, err := mc.scrapeVideoURL(wallpaperURL)
 	if err != nil {
@@ -149,29 +149,59 @@ func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]b
 	}
 	updateStatus(fmt.Sprintf("✅ Video URL found\n🔗 **Video:** %s", videoURL))
 
-	// Step 5: Download video
+	// Step 7: Download video
+	startDownload := time.Now()
 	updateStatus("⬇️ Downloading video...")
 	videoData, err := mc.downloadVideo(videoURL)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to download video: %w", err)
 	}
-	updateStatus(fmt.Sprintf("✅ Downloaded %d KB", len(videoData)/1024))
+	downloadTime := time.Since(startDownload).Seconds()
+	downloadSize := len(videoData) / 1024
+	
+	// Get video info
+	vWidth, vHeight, vCodec := getVideoInfo(videoData)
+	vDuration := getVideoDuration(videoData)
+	
+	updateStatus(fmt.Sprintf("✅ Downloaded %d KB in %.1fs\n📐 **Resolution:** %dx%d\n🎞️ **Codec:** %s\n⏱️ **Duration:** %.1fs",
+		downloadSize, downloadTime, vWidth, vHeight, vCodec, vDuration))
 
-	// Step 6: Resize to 1920x1080 if needed (using ffmpeg)
+	// Step 8: Resize to 1920x1080 if needed (using ffmpeg)
+	startResize := time.Now()
 	updateStatus("📐 Resizing video...")
 	resized, err := ResizeVideo(videoData, 1920, 1080)
 	if err != nil {
 		// If resize fails, use original
 		resized = videoData
 	}
+	resizeTime := time.Since(startResize).Seconds()
+	resizedSize := len(resized) / 1024
+	rWidth, rHeight, _ := getVideoInfo(resized)
+	
+	if resizeTime > 0.1 { // Only show resize info if it actually ran
+		updateStatus(fmt.Sprintf("✅ Resized in %.1fs\n📐 **New resolution:** %dx%d\n📦 **Size:** %d KB",
+			resizeTime, rWidth, rHeight, resizedSize))
+	}
 
-	// Step 7: Convert to GIF and compress to under 10MB
+	// Step 9: Convert to GIF and compress to under 10MB
+	startConvert := time.Now()
 	updateStatus("🎬 Converting to GIF...")
 	compressed, err := VideoToCompressedGIF(resized, maxBannerSizeAnimated)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert to GIF: %w", err)
 	}
-	updateStatus(fmt.Sprintf("✅ GIF ready (%d KB)", len(compressed)/1024))
+	convertTime := time.Since(startConvert).Seconds()
+	compressedSize := len(compressed) / 1024
+	
+	// Calculate compression ratio
+	compressionRatio := 0.0
+	if len(resized) > 0 {
+		compressionRatio = (1.0 - float64(len(compressed))/float64(len(resized))) * 100
+	}
+	
+	updateStatus(fmt.Sprintf("✅ GIF ready in %.1fs\n📦 **Size:** %d KB → %d KB (%.1f%% compressed)\n⏱️ **Total time:** %.1fs",
+		convertTime, downloadSize, compressedSize, compressionRatio, 
+		downloadTime+resizeTime+convertTime))
 
 	// Check if compression was applied
 	wasCompressed := len(compressed) < len(resized)
