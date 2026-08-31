@@ -140,6 +140,14 @@ func (mc *MoeWallsClient) scrapeListPage(url string) ([]string, error) {
 	doc.Find("a[href*='/anime/']").Each(func(i int, s *goquery.Selection) {
 		href, exists := s.Attr("href")
 		if exists && strings.Contains(href, "/anime/") && strings.HasSuffix(href, "/") {
+			// Exclude category pages and pagination
+			if strings.Contains(href, "/category/") || strings.Contains(href, "/page/") {
+				return
+			}
+			// Only include wallpaper pages (they have -live-wallpaper in URL)
+			if !strings.Contains(href, "-live-wallpaper") {
+				return
+			}
 			// Only add unique URLs
 			if !contains(urls, href) {
 				urls = append(urls, href)
