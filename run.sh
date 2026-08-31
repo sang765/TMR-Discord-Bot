@@ -50,8 +50,14 @@ if [ ! -f "./tmr-bot" ]; then
 
     if [ ! -d "/home/container/go" ]; then
         echo "Installing Go..."
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            GO_URL="https://go.dev/dl/go1.23.6.linux-arm64.tar.gz"
+        else
+            GO_URL="https://go.dev/dl/go1.23.6.linux-amd64.tar.gz"
+        fi
         mkdir -p /home/container/go
-        wget -q https://go.dev/dl/go1.23.6.linux-amd64.tar.gz -O /tmp/go.tar.gz
+        wget -q "$GO_URL" -O /tmp/go.tar.gz
         tar -C /home/container -xzf /tmp/go.tar.gz
         rm /tmp/go.tar.gz
     fi
@@ -59,7 +65,13 @@ if [ ! -f "./tmr-bot" ]; then
     # Install ffmpeg if not present (extract only binary, not models)
     if ! command -v ffmpeg &> /dev/null && [ ! -f "/home/container/ffmpeg" ]; then
         echo "Installing ffmpeg..."
-        wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -O /tmp/ffmpeg.tar.xz
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz"
+        else
+            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+        fi
+        wget -q "$FFMPEG_URL" -O /tmp/ffmpeg.tar.xz
         tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffmpeg' --strip-components=1 -C /home/container/
         tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffprobe' --strip-components=1 -C /home/container/
         chmod +x /home/container/ffmpeg /home/container/ffprobe
