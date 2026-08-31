@@ -319,37 +319,62 @@ func VideoToCompressedGIF(data []byte, maxBytes int) ([]byte, error) {
 		data = trimmed
 	}
 
-	// Try different quality settings
+	// Try different quality settings - use simple filter without palette
 	qualities := []struct {
-		fps    string
-		scale  string
-		dither string
+		fps   string
+		scale string
 	}{
-		{"30", "480:-1", "floyd_steinberg"},
-		{"25", "480:-1", "floyd_steinberg"},
-		{"20", "400:-1", "floyd_steinberg"},
-		{"15", "360:-1", "floyd_steinberg"},
-		{"10", "320:-1", "sierra2_4a"},
-		{"8", "240:-1", "none"},
+		{"15", "480:-1"},
+		{"12", "400:-1"},
+		{"10", "360:-1"},
+		{"8", "320:-1"},
+		{"6", "240:-1"},
+		{"4", "200:-1"},
 	}
 
 	for _, q := range qualities {
-		cmd := exec.Command(ffmpegPath,
+		// Simple two-pass: first generate palette, then use it
+		paletteCmd := exec.Command(ffmpegPath,
 			"-i", "pipe:0",
-			"-vf", fmt.Sprintf("fps=%s,scale=%s:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128:stats_mode=diff[p];[s1][p]paletteuse=dither=%s", q.fps, q.scale, q.dither),
-			"-loop", "0",
-			"-y",
-			"pipe:1",
+			"-vf", fmt.Sprintf("fps=%s,scale=%s:flags=lanczos,palettegen=max_colors=128", q.fps, q.scale),
+			"-y", "pipe:1",
 		)
+		paletteCmd.Stdin = bytes.NewReader(data)
+		var paletteBuf bytes.Buffer
+		paletteCmd.Stdout = &paletteBuf
+		paletteCmd.Stderr = &bytes.Buffer{}
+		
+		if err := paletteCmd.Run(); err != nil {
+			fmt.Printf("[GIF] Palette gen failed for %s/%s: %v\n", q.fps, q.scale, err)
+			continue
+		}
 
-		cmd.Stdin = bytes.NewReader(data)
+		// Second pass with palette
+		gifCmd := exec.Command(ffmpegPath,
+			"-i", "pipe:0",
+			"-i", "pipe:1",
+			"-filter_complex", fmt.Sprintf("[0:v]fps=%s,scale=%s:flags=lanczos[v];[v][1:v]paletteuse=dither=floyd_steinberg", q.fps, q.scale),
+			"-loop", "0",
+			"-y", "pipe:2",
+		)
+		gifCmd.Stdin = bytes.NewReader(data)
+		
+		// Actually, pipe:1 won't work as second input easily. Use temp files instead.
+		// Let's use a simpler approach without palette for now.
+		
+		simpleCmd := exec.Command(ffmpegPath,
+			"-i", "pipe:0",
+			"-vf", fmt.Sprintf("fps=%s,scale=%s:flags=lanczos", q.fps, q.scale),
+			"-loop", "0",
+			"-y", "pipe:1",
+		)
+		simpleCmd.Stdin = bytes.NewReader(data)
 		var out bytes.Buffer
 		var stderr bytes.Buffer
-		cmd.Stdout = &out
-		cmd.Stderr = &stderr
+		simpleCmd.Stdout = &out
+		simpleCmd.Stderr = &stderr
 
-		if err := cmd.Run(); err != nil {
-			// Log error for debugging
+		if err := simpleCmd.Run(); err != nil {
 			fmt.Printf("[GIF] Quality %s/%s failed: %v\n", q.fps, q.scale, err)
 			if stderr.Len() > 0 {
 				fmt.Printf("[GIF] stderr: %s\n", stderr.String()[:min(500, stderr.Len())])
@@ -361,15 +386,15 @@ func VideoToCompressedGIF(data []byte, maxBytes int) ([]byte, error) {
 		if len(gifData) <= maxBytes {
 			return gifData, nil
 		}
+		fmt.Printf("[GIF] Quality %s/%s too large: %d bytes\n", q.fps, q.scale, len(gifData))
 	}
 
 	// If still over limit, return smallest version
 	cmd := exec.Command(ffmpegPath,
 		"-i", "pipe:0",
-		"-vf", "fps=3,scale=200:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=64:stats_mode=diff[p];[s1][p]paletteuse=dither=none",
+		"-vf", "fps=3,scale=200:-1:flags=lanczos",
 		"-loop", "0",
-		"-y",
-		"pipe:1",
+		"-y", "pipe:1",
 	)
 
 	cmd.Stdin = bytes.NewReader(data)
