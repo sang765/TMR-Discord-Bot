@@ -42,6 +42,18 @@ func NewMoeWallsClient() *MoeWallsClient {
 // GetRandomVideo downloads a random anime video from MoeWalls
 // Returns the video bytes and whether it was compressed
 func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
+	return mc.GetRandomVideoWithStatus(nil)
+}
+
+// GetRandomVideoWithStatus downloads a random anime video with status callback
+func (mc *MoeWallsClient) GetRandomVideoWithStatus(statusFunc func(string)) ([]byte, bool, error) {
+	updateStatus := func(msg string) {
+		fmt.Printf("[MoeWalls] %s\n", msg)
+		if statusFunc != nil {
+			statusFunc(msg)
+		}
+	}
+
 	// Step 1: Get random page
 	pageNum := rand.Intn(maxPages) + 1
 	var pageURL string
@@ -50,7 +62,7 @@ func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
 	} else {
 		pageURL = fmt.Sprintf("%s/page/%d/", moewallsCategoryURL, pageNum)
 	}
-	fmt.Printf("[MoeWalls] Random page: %d -> %s\n", pageNum, pageURL)
+	updateStatus(fmt.Sprintf("📡 Fetching page %d...", pageNum))
 
 	// Step 2: Scrape list page to get wallpaper URLs
 	wallpaperURLs, err := mc.scrapeListPage(pageURL)
@@ -60,28 +72,31 @@ func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
 	if len(wallpaperURLs) == 0 {
 		return nil, false, fmt.Errorf("no wallpapers found on page %d", pageNum)
 	}
-	fmt.Printf("[MoeWalls] Found %d wallpapers on page %d\n", len(wallpaperURLs), pageNum)
+	updateStatus(fmt.Sprintf("📋 Found %d wallpapers", len(wallpaperURLs)))
 
 	// Step 3: Pick random wallpaper
 	randomIdx := rand.Intn(len(wallpaperURLs))
 	wallpaperURL := wallpaperURLs[randomIdx]
-	fmt.Printf("[MoeWalls] Picked wallpaper %d/%d: %s\n", randomIdx+1, len(wallpaperURLs), wallpaperURL)
+	updateStatus(fmt.Sprintf("🎲 Picked wallpaper %d/%d", randomIdx+1, len(wallpaperURLs)))
 
 	// Step 4: Scrape individual page to get video URL
+	updateStatus("🔍 Finding video URL...")
 	videoURL, err := mc.scrapeVideoURL(wallpaperURL)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get video URL: %w", err)
 	}
-	fmt.Printf("[MoeWalls] Video URL: %s\n", videoURL)
+	updateStatus("✅ Video URL found")
 
 	// Step 5: Download video
+	updateStatus("⬇️ Downloading video...")
 	videoData, err := mc.downloadVideo(videoURL)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to download video: %w", err)
 	}
-	fmt.Printf("[MoeWalls] Downloaded %d bytes\n", len(videoData))
+	updateStatus(fmt.Sprintf("✅ Downloaded %d KB", len(videoData)/1024))
 
 	// Step 6: Resize to 1920x1080 if needed (using ffmpeg)
+	updateStatus("📐 Resizing video...")
 	resized, err := ResizeVideo(videoData, 1920, 1080)
 	if err != nil {
 		// If resize fails, use original
@@ -89,10 +104,12 @@ func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
 	}
 
 	// Step 7: Convert to GIF and compress to under 10MB
+	updateStatus("🎬 Converting to GIF...")
 	compressed, err := VideoToCompressedGIF(resized, maxBannerSizeAnimated)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert to GIF: %w", err)
 	}
+	updateStatus(fmt.Sprintf("✅ GIF ready (%d KB)", len(compressed)/1024))
 
 	// Check if compression was applied
 	wasCompressed := len(compressed) < len(resized)

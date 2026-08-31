@@ -177,15 +177,20 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 			return
 		}
 	case "moewalls":
-		gifData, _, e := mwc.GetRandomVideo()
+		msgID := sendMessageWithID(s, m, "🎬 Fetching random icon from MoeWalls...")
+		gifData, _, e := mwc.GetRandomVideoWithStatus(func(status string) {
+			editMessage(s, m, msgID, status)
+		})
 		if e != nil {
-			sendMessage(s, m, fmt.Sprintf("Error fetching video: %v", e))
+			editMessage(s, m, msgID, fmt.Sprintf("❌ Error: %v", e))
 			return
 		}
+		editMessage(s, m, msgID, "⬆️ Uploading to Discord...")
 		if err := setAnimatedIcon(s, m, gifData, guildID); err != nil {
-			sendMessage(s, m, fmt.Sprintf("Error setting animated icon: %v", err))
+			editMessage(s, m, msgID, fmt.Sprintf("❌ Error setting icon: %v", err))
 			return
 		}
+		editMessage(s, m, msgID, "✅ Icon updated!")
 	default: // konachan
 		iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, e := iconKC.GetRandomImage()
@@ -237,15 +242,20 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 			return
 		}
 	case "moewalls":
-		gifData, _, e := mwc.GetRandomVideo()
+		msgID := sendMessageWithID(s, m, "🎬 Fetching random banner from MoeWalls...")
+		gifData, _, e := mwc.GetRandomVideoWithStatus(func(status string) {
+			editMessage(s, m, msgID, status)
+		})
 		if e != nil {
-			sendMessage(s, m, fmt.Sprintf("Error fetching video: %v", e))
+			editMessage(s, m, msgID, fmt.Sprintf("❌ Error: %v", e))
 			return
 		}
+		editMessage(s, m, msgID, "⬆️ Uploading to Discord...")
 		if err := setAnimatedBanner(s, m, gifData, guildID); err != nil {
-			sendMessage(s, m, fmt.Sprintf("Error setting animated banner: %v", err))
+			editMessage(s, m, msgID, fmt.Sprintf("❌ Error setting banner: %v", err))
 			return
 		}
+		editMessage(s, m, msgID, "✅ Banner updated!")
 	default: // konachan
 		bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
 		img, e := bannerKC.GetRandomImage()
@@ -621,6 +631,18 @@ func handleSetSource(s *discordgo.Session, m *discordgo.MessageCreate, cfg *conf
 
 func sendMessage(s *discordgo.Session, m *discordgo.MessageCreate, content string) {
 	s.ChannelMessageSend(m.ChannelID, content)
+}
+
+func editMessage(s *discordgo.Session, m *discordgo.MessageCreate, msgID string, content string) {
+	s.ChannelMessageEdit(m.ChannelID, msgID, content)
+}
+
+func sendMessageWithID(s *discordgo.Session, m *discordgo.MessageCreate, content string) string {
+	msg, _ := s.ChannelMessageSend(m.ChannelID, content)
+	if msg != nil {
+		return msg.ID
+	}
+	return ""
 }
 
 func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
