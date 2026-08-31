@@ -119,20 +119,39 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 	fmt.Printf("[Loop] Best loop at %.2fs with similarity %.4f (%.2f%% diff)\n", 
 		bestMatchTime, bestSimilarity, bestSimilarity*100)
 	
+	// If best match is still bad (> 15% diff), don't trim - video might not loop naturally
+	if bestSimilarity > 0.15 {
+		fmt.Printf("[Loop] No good loop point found, using full duration\n")
+		return duration
+	}
+	
 	return bestMatchTime
 }
 // getVideoDuration extracts video duration in seconds using ffprobe
 func getVideoDuration(data []byte) float64 {
 	ffprobePath := getFFprobePath()
 	
+	// Write to temp file (pipe:0 unreliable on static ffprobe)
+	tmpFile, err := os.CreateTemp("", "moewalls-probe-*.webm")
+	if err != nil {
+		return 0
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+	
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return 0
+	}
+	tmpFile.Close()
+	
 	cmd := exec.Command(ffprobePath,
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",
-		"pipe:0",
+		tmpPath,
 	)
 
-	cmd.Stdin = bytes.NewReader(data)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0
@@ -150,41 +169,38 @@ func getVideoDuration(data []byte) float64 {
 func getVideoInfo(data []byte) (width, height int, codec string) {
 	ffprobePath := getFFprobePath()
 	
+	// Write to temp file (pipe:0 unreliable on static ffprobe)
+	tmpFile, err := os.CreateTemp("", "moewalls-info-*.webm")
+	if err != nil {
+		return 0, 0, "unknown"
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+	
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return 0, 0, "unknown"
+	}
+	tmpFile.Close()
+	
 	cmd := exec.Command(ffprobePath,
 		"-v", "error",
 		"-select_streams", "v:0",
 		"-show_entries", "stream=width,height,codec_name",
-		"-of", "csv=p=0:s=x",
-		"pipe:0",
+		"-of", "csv=p=0",
+		tmpPath,
 	)
 
-	cmd.Stdin = bytes.NewReader(data)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0, 0, "unknown"
 	}
 
-	output := strings.TrimSpace(string(out))
-	
-	// Try different formats
-	// Format 1: "width x height x codec" (with =x separator)
-	if strings.Contains(output, "x") {
-		parts := strings.Split(output, "x")
-		if len(parts) >= 3 {
-			width, _ = strconv.Atoi(parts[0])
-			height, _ = strconv.Atoi(parts[1])
-			codec = parts[2]
-			return
-		}
-	}
-	
-	// Format 2: "width,height,codec" (comma separated)
-	parts := strings.Split(output, ",")
+	parts := strings.Split(strings.TrimSpace(string(out)), ",")
 	if len(parts) >= 3 {
 		width, _ = strconv.Atoi(strings.TrimSpace(parts[0]))
 		height, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
 		codec = strings.TrimSpace(parts[2])
-		return
 	}
 
 	return width, height, codec
@@ -194,21 +210,49 @@ func getVideoInfo(data []byte) (width, height int, codec string) {
 func extractFrameAt(data []byte, timeSec float64) *image.RGBA {
 	ffmpegPath := getFFmpegPath()
 	
+	// Write to temp file (pipe:0 unreliable on static ffmpeg)
+	tmpFile, err := os.CreateTemp("", "moewalls-frame-*.webm")
+	if err != nil {
+		return nil
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+	
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return nil
+	}
+	tmpFile.Close()
+	
+	// Output to temp PNG
+	outFile, err := os.CreateTemp("", "moewalls-frame-*.png")
+	if err != nil {
+		return nil
+	}
+	outPath := outFile.Name()
+	defer os.Remove(outPath)
+	outFile.Close()
+	
 	cmd := exec.Command(ffmpegPath,
 		"-ss", fmt.Sprintf("%.2f", timeSec),
-		"-i", "pipe:0",
+		"-i", tmpPath,
 		"-vframes", "1",
-		"-f", "image2pipe",
+		"-f", "image2",
 		"-v", "error",
-		"pipe:1",
+		"-y",
+		outPath,
 	)
-	cmd.Stdin = bytes.NewReader(data)
-	out, err := cmd.Output()
+	
+	if err := cmd.Run(); err != nil {
+		return nil
+	}
+	
+	imgData, err := os.ReadFile(outPath)
 	if err != nil {
 		return nil
 	}
 	
-	img, _, err := image.Decode(bytes.NewReader(out))
+	img, _, err := image.Decode(bytes.NewReader(imgData))
 	if err != nil {
 		return nil
 	}
