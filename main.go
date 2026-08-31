@@ -56,6 +56,7 @@ func main() {
 	konachanClient := utils.NewKonachanClient("", cfg.Konachan.Rating, cfg.Konachan.MinScore)
 	zerochanClient := utils.NewZerochanClient("", "TMR-Discord-Bot", "tmr-bot")
 	wallhavenClient := utils.NewWallhavenClient("")
+	moewallsClient := utils.NewMoeWallsClient()
 
 	dg, err := discordgo.New("Bot " + env.DiscordToken)
 	if err != nil {
@@ -71,7 +72,7 @@ func main() {
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-		handlers.MessageHandler(s, m, cfg, konachanClient, zerochanClient, wallhavenClient, env.GuildID)
+		handlers.MessageHandler(s, m, cfg, konachanClient, zerochanClient, wallhavenClient, moewallsClient, env.GuildID)
 	})
 
 	dg.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -96,7 +97,7 @@ func main() {
 	defer cancel()
 
 	if cfg.Auto.IconEnabled || cfg.Auto.BannerEnabled {
-		go handlers.AutoChangeLoop(ctx, dg, env.GuildID, cfg, konachanClient, zerochanClient, wallhavenClient)
+		go handlers.AutoChangeLoop(ctx, dg, env.GuildID, cfg, konachanClient, zerochanClient, wallhavenClient, moewallsClient)
 	}
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")

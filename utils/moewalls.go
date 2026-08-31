@@ -5,125 +5,209 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
-const moewallsBaseURL = "https://moewalls.com"
+const (
+	moewallsBaseURL    = "https://moewalls.com"
+	moewallsCategoryURL = moewallsBaseURL + "/category/anime/"
+	maxPages           = 285
+	maxBannerSizeAnimated = 10 * 1024 * 1024 // 10MB
+)
+
+type MoeWallsClient struct {
+	httpClient *http.Client
+}
 
 type MoeWallsEntry struct {
 	Title     string
 	PageURL   string
-	Thumbnail string
 	VideoURL  string
-}
-
-type MoeWallsClient struct {
-	HTTPClient *http.Client
+	Thumbnail string
 }
 
 func NewMoeWallsClient() *MoeWallsClient {
 	return &MoeWallsClient{
-		HTTPClient: &http.Client{
+		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
 }
 
-func (c *MoeWallsClient) GetRandomWallpaper() (*MoeWallsEntry, error) {
-	// Random page (1-286 based on research)
-	page := rand.Intn(286) + 1
-	url := fmt.Sprintf("%s/category/anime/page/%d/", moewallsBaseURL, page)
+// GetRandomVideo downloads a random anime video from MoeWalls
+// Returns the video bytes and whether it was compressed
+func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
+	// Step 1: Get random page
+	pageNum := rand.Intn(maxPages) + 1
+	var pageURL string
+	if pageNum == 1 {
+		pageURL = moewallsCategoryURL
+	} else {
+		pageURL = fmt.Sprintf("%s/page/%d/", moewallsCategoryURL, pageNum)
+	}
 
+	// Step 2: Scrape list page to get wallpaper URLs
+	wallpaperURLs, err := mc.scrapeListPage(pageURL)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to scrape list page: %w", err)
+	}
+	if len(wallpaperURLs) == 0 {
+		return nil, false, fmt.Errorf("no wallpapers found on page %d", pageNum)
+	}
+
+	// Step 3: Pick random wallpaper
+	randomIdx := rand.Intn(len(wallpaperURLs))
+	wallpaperURL := wallpaperURLs[randomIdx]
+
+	// Step 4: Scrape individual page to get video URL
+	videoURL, err := mc.scrapeVideoURL(wallpaperURL)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get video URL: %w", err)
+	}
+
+	// Step 5: Download video
+	videoData, err := mc.downloadVideo(videoURL)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to download video: %w", err)
+	}
+
+	// Step 6: Resize to 1920x1080 if needed (using ffmpeg)
+	resized, err := ResizeVideo(videoData, 1920, 1080)
+	if err != nil {
+		// If resize fails, use original
+		resized = videoData
+	}
+
+	// Step 7: Convert to GIF and compress to under 10MB
+	compressed, err := VideoToCompressedGIF(resized, maxBannerSizeAnimated)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to convert to GIF: %w", err)
+	}
+
+	// Check if compression was applied
+	wasCompressed := len(compressed) < len(resized)
+
+	return compressed, wasCompressed, nil
+}
+
+// scrapeListPage extracts wallpaper URLs from a list page
+func (mc *MoeWallsClient) scrapeListPage(url string) ([]string, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := mc.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch moewalls page: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("moewalls returned status %d", resp.StatusCode)
-	}
-
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTML: %w", err)
+		return nil, err
 	}
 
-	// Find all wallpaper cards
-	var entries []MoeWallsEntry
-	doc.Find("li.g1-collection-item").Each(func(i int, s *goquery.Selection) {
-		titleEl := s.Find("h3.entry-title a")
-		thumbEl := s.Find("a.g1-frame img")
-
-		title := strings.TrimSpace(titleEl.Text())
-		pageURL, _ := titleEl.Attr("href")
-		thumbnail, _ := thumbEl.Attr("src")
-
-		if pageURL != "" {
-			entries = append(entries, MoeWallsEntry{
-				Title:     title,
-				PageURL:   pageURL,
-				Thumbnail: thumbnail,
-			})
+	var urls []string
+	doc.Find("a[href*='/anime/']").Each(func(i int, s *goquery.Selection) {
+		href, exists := s.Attr("href")
+		if exists && strings.Contains(href, "/anime/") && strings.HasSuffix(href, "/") {
+			// Only add unique URLs
+			if !contains(urls, href) {
+				urls = append(urls, href)
+			}
 		}
 	})
 
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("no wallpapers found on moewalls")
-	}
-
-	entry := &entries[rand.Intn(len(entries))]
-
-	// Fetch video URL from individual page
-	if err := c.fetchVideoURL(entry); err != nil {
-		// If video fetch fails, return entry with thumbnail only
-		entry.VideoURL = entry.Thumbnail
-	}
-
-	return entry, nil
+	return urls, nil
 }
 
-func (c *MoeWallsClient) fetchVideoURL(entry *MoeWallsEntry) error {
-	req, err := http.NewRequest("GET", entry.PageURL, nil)
+// scrapeVideoURL extracts the video URL from a wallpaper page
+func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
+	req, err := http.NewRequest("GET", pageURL, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := mc.httpClient.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	// Look for video source URL in the HTML
-	// Pattern: <source src="..." type="video/mp4">
-	content := string(body)
-	if idx := strings.Index(content, `<source src="`); idx != -1 {
-		start := idx + len(`<source src="`)
-		end := strings.Index(content[start:], `"`)
-		if end != -1 {
-			videoURL := content[start : start+end]
-			entry.VideoURL = videoURL
-			return nil
+	// Look for source tag with video URL
+	// Pattern: <source src="/wp-content/uploads/preview/YYYY/slug-preview.webm"
+	re := regexp.MustCompile(`src="(/wp-content/uploads/preview/[^"]+\.webm)"`)
+	matches := re.FindStringSubmatch(string(body))
+	if len(matches) >= 2 {
+		return moewallsBaseURL + matches[1], nil
+	}
+
+	// Try video src attribute
+	re2 := regexp.MustCompile(`src="(https?://[^"]+\.webm)"`)
+	matches2 := re2.FindStringSubmatch(string(body))
+	if len(matches2) >= 2 {
+		return matches2[1], nil
+	}
+
+	return "", fmt.Errorf("no video URL found on page")
+}
+
+// downloadVideo downloads the video file
+func (mc *MoeWallsClient) downloadVideo(url string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	resp, err := mc.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+// GetRandomPage returns a random page number for MoeWalls
+func (mc *MoeWallsClient) GetRandomPage() int {
+	return rand.Intn(maxPages) + 1
+}
+
+// contains checks if a string slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
 		}
 	}
+	return false
+}
 
-	// Fallback: use thumbnail
-	entry.VideoURL = entry.Thumbnail
-	return fmt.Errorf("video URL not found, using thumbnail")
+// parseResolution parses a resolution string like "1920x1080" into width and height
+func parseResolution(res string) (int, int) {
+	parts := strings.Split(res, "x")
+	if len(parts) != 2 {
+		return 0, 0
+	}
+	w, _ := strconv.Atoi(parts[0])
+	h, _ := strconv.Atoi(parts[1])
+	return w, h
 }

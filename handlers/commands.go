@@ -13,7 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, guildID string) {
+func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient, guildID string) {
 	if m.Author.Bot {
 		return
 	}
@@ -52,9 +52,9 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 	case "help":
 		sendHelp(s, m, cfg)
 	case "seticon":
-		handleSetIcon(s, m, kc, zc, whc, cfg, guildID)
+		handleSetIcon(s, m, kc, zc, whc, mwc, cfg, guildID)
 	case "setbanner":
-		handleSetBanner(s, m, kc, zc, whc, cfg, guildID)
+		handleSetBanner(s, m, kc, zc, whc, mwc, cfg, guildID)
 	case "boost":
 		handleBoostCheck(s, m, guildID)
 	case "config":
@@ -83,7 +83,7 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		if len(args) > 1 {
 			handleSetSource(s, m, cfg, args[1])
 		} else {
-			sendMessage(s, m, fmt.Sprintf("Current source: `%s`\nAvailable: `konachan`, `zerochan`, `wallhaven`", cfg.Source))
+			sendMessage(s, m, fmt.Sprintf("Current source: `%s`\nAvailable: `konachan`, `zerochan`, `wallhaven`, `moewalls`", cfg.Source))
 		}
 	case "setprefix":
 		if len(args) > 1 {
@@ -145,10 +145,8 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 	sendMessage(s, m, content)
 }
 
-func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, cfg *config.Config, guildID string) {
+func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient, cfg *config.Config, guildID string) {
 	sendMessage(s, m, fmt.Sprintf("Fetching random icon from %s...", cfg.Source))
-
-	var imgURL string
 
 	switch cfg.Source {
 	case "zerochan":
@@ -157,9 +155,13 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 			sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", e))
 			return
 		}
-		imgURL = entry.GetImageURL()
+		imgURL := entry.GetImageURL()
 		if imgURL == "" {
 			sendMessage(s, m, "Error: No valid image URL found from zerochan")
+			return
+		}
+		if err := downloadAndSetIconFromURL(s, m, imgURL, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting icon: %v", err))
 			return
 		}
 	case "wallhaven":
@@ -168,9 +170,23 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 			sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", e))
 			return
 		}
-		imgURL = entry.GetImageURL()
+		imgURL := entry.GetImageURL()
 		if imgURL == "" {
 			sendMessage(s, m, "Error: No valid image URL found from wallhaven")
+			return
+		}
+		if err := downloadAndSetIconFromURL(s, m, imgURL, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting icon: %v", err))
+			return
+		}
+	case "moewalls":
+		gifData, _, e := mwc.GetRandomVideo()
+		if e != nil {
+			sendMessage(s, m, fmt.Sprintf("Error fetching video: %v", e))
+			return
+		}
+		if err := setAnimatedIcon(s, m, gifData, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting animated icon: %v", err))
 			return
 		}
 	default: // konachan
@@ -180,21 +196,17 @@ func handleSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.K
 			sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", e))
 			return
 		}
-		imgURL = img.FileURL
-	}
-
-	if err := downloadAndSetIconFromURL(s, m, imgURL, guildID); err != nil {
-		sendMessage(s, m, fmt.Sprintf("Error setting icon: %v", err))
-		return
+		if err := downloadAndSetIconFromURL(s, m, img.FileURL, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting icon: %v", err))
+			return
+		}
 	}
 
 	sendMessage(s, m, "Icon updated!")
 }
 
-func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, cfg *config.Config, guildID string) {
+func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient, cfg *config.Config, guildID string) {
 	sendMessage(s, m, fmt.Sprintf("Fetching random banner from %s...", cfg.Source))
-
-	var imgURL string
 
 	switch cfg.Source {
 	case "zerochan":
@@ -203,9 +215,13 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 			sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", e))
 			return
 		}
-		imgURL = entry.GetImageURL()
+		imgURL := entry.GetImageURL()
 		if imgURL == "" {
 			sendMessage(s, m, "Error: No valid image URL found from zerochan")
+			return
+		}
+		if err := downloadAndSetBannerFromURL(s, m, imgURL, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting banner: %v", err))
 			return
 		}
 	case "wallhaven":
@@ -214,9 +230,23 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 			sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", e))
 			return
 		}
-		imgURL = entry.GetImageURL()
+		imgURL := entry.GetImageURL()
 		if imgURL == "" {
 			sendMessage(s, m, "Error: No valid image URL found from wallhaven")
+			return
+		}
+		if err := downloadAndSetBannerFromURL(s, m, imgURL, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting banner: %v", err))
+			return
+		}
+	case "moewalls":
+		gifData, _, e := mwc.GetRandomVideo()
+		if e != nil {
+			sendMessage(s, m, fmt.Sprintf("Error fetching video: %v", e))
+			return
+		}
+		if err := setAnimatedBanner(s, m, gifData, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting animated banner: %v", err))
 			return
 		}
 	default: // konachan
@@ -226,12 +256,10 @@ func handleSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, kc *utils
 			sendMessage(s, m, fmt.Sprintf("Error fetching image: %v", e))
 			return
 		}
-		imgURL = img.FileURL
-	}
-
-	if err := downloadAndSetBannerFromURL(s, m, imgURL, guildID); err != nil {
-		sendMessage(s, m, fmt.Sprintf("Error setting banner: %v", err))
-		return
+		if err := downloadAndSetBannerFromURL(s, m, img.FileURL, guildID); err != nil {
+			sendMessage(s, m, fmt.Sprintf("Error setting banner: %v", err))
+			return
+		}
 	}
 
 	sendMessage(s, m, "Banner updated!")
@@ -300,6 +328,22 @@ func downloadAndSetBannerFromURL(s *discordgo.Session, m *discordgo.MessageCreat
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+		Banner: dataURI,
+	})
+	return err
+}
+
+func setAnimatedIcon(s *discordgo.Session, m *discordgo.MessageCreate, gifData []byte, guildID string) error {
+	dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+	_, err := s.GuildEdit(guildID, &discordgo.GuildParams{
+		Icon: dataURI,
+	})
+	return err
+}
+
+func setAnimatedBanner(s *discordgo.Session, m *discordgo.MessageCreate, gifData []byte, guildID string) error {
+	dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+	_, err := s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
 	return err
@@ -569,12 +613,12 @@ func handleSetScore(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 func handleSetSource(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, value string) {
 	value = strings.ToLower(value)
 	switch value {
-	case "konachan", "zerochan", "wallhaven":
+	case "konachan", "zerochan", "wallhaven", "moewalls":
 		cfg.Source = value
 		config.SaveConfig(cfg)
 		sendMessage(s, m, fmt.Sprintf("Image source set to `%s`", value))
 	default:
-		sendMessage(s, m, "Available sources: `konachan`, `zerochan`, `wallhaven`")
+		sendMessage(s, m, "Available sources: `konachan`, `zerochan`, `wallhaven`, `moewalls`")
 	}
 }
 

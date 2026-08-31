@@ -19,7 +19,7 @@ func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
 
-func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient) {
+func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient) {
 	lastInterval := cfg.Auto.Interval
 	interval := time.Duration(lastInterval) * time.Second
 	ticker := time.NewTicker(interval)
@@ -38,7 +38,7 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 			return
 		case <-ticker.C:
 			if cfg.Auto.BannerEnabled {
-				changeBanner(s, guildID, cfg, kc, zc, whc)
+				changeBanner(s, guildID, cfg, kc, zc, whc, mwc)
 			}
 		}
 
@@ -99,10 +99,8 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *ut
 	slog.Info("Server icon updated")
 }
 
-func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient) {
+func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient) {
 	slog.Info("Changing server banner...")
-
-	var imgURL string
 
 	switch cfg.Source {
 	case "zerochan":
@@ -111,9 +109,27 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			slog.Error("Failed to fetch banner from zerochan", slog.Any("error", err))
 			return
 		}
-		imgURL = entry.GetImageURL()
+		imgURL := entry.GetImageURL()
 		if imgURL == "" {
 			slog.Error("No valid image URL from zerochan")
+			return
+		}
+		data, err := downloadImageForAuto(imgURL)
+		if err != nil {
+			slog.Error("Failed to download banner image", slog.Any("error", err))
+			return
+		}
+		compressed, err := utils.CompressToUnderLimit(data)
+		if err != nil {
+			slog.Error("Failed to compress banner image", slog.Any("error", err))
+			return
+		}
+		dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+			Banner: dataURI,
+		})
+		if err != nil {
+			slog.Error("Failed to set banner", slog.Any("error", err))
 			return
 		}
 	case "wallhaven":
@@ -122,9 +138,41 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			slog.Error("Failed to fetch banner from wallhaven", slog.Any("error", err))
 			return
 		}
-		imgURL = entry.GetImageURL()
+		imgURL := entry.GetImageURL()
 		if imgURL == "" {
 			slog.Error("No valid image URL from wallhaven")
+			return
+		}
+		data, err := downloadImageForAuto(imgURL)
+		if err != nil {
+			slog.Error("Failed to download banner image", slog.Any("error", err))
+			return
+		}
+		compressed, err := utils.CompressToUnderLimit(data)
+		if err != nil {
+			slog.Error("Failed to compress banner image", slog.Any("error", err))
+			return
+		}
+		dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+			Banner: dataURI,
+		})
+		if err != nil {
+			slog.Error("Failed to set banner", slog.Any("error", err))
+			return
+		}
+	case "moewalls":
+		gifData, _, err := mwc.GetRandomVideo()
+		if err != nil {
+			slog.Error("Failed to fetch video from moewalls", slog.Any("error", err))
+			return
+		}
+		dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+			Banner: dataURI,
+		})
+		if err != nil {
+			slog.Error("Failed to set animated banner", slog.Any("error", err))
 			return
 		}
 	default: // konachan
@@ -134,29 +182,24 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			slog.Error("Failed to fetch banner from konachan", slog.Any("error", err))
 			return
 		}
-		imgURL = img.FileURL
-	}
-
-	data, err := downloadImageForAuto(imgURL)
-	if err != nil {
-		slog.Error("Failed to download banner image", slog.Any("error", err))
-		return
-	}
-
-	// Compress if over 10MB limit
-	compressed, err := utils.CompressToUnderLimit(data)
-	if err != nil {
-		slog.Error("Failed to compress banner image", slog.Any("error", err))
-		return
-	}
-
-	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
-	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
-		Banner: dataURI,
-	})
-	if err != nil {
-		slog.Error("Failed to set banner", slog.Any("error", err))
-		return
+		data, err := downloadImageForAuto(img.FileURL)
+		if err != nil {
+			slog.Error("Failed to download banner image", slog.Any("error", err))
+			return
+		}
+		compressed, err := utils.CompressToUnderLimit(data)
+		if err != nil {
+			slog.Error("Failed to compress banner image", slog.Any("error", err))
+			return
+		}
+		dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+			Banner: dataURI,
+		})
+		if err != nil {
+			slog.Error("Failed to set banner", slog.Any("error", err))
+			return
+		}
 	}
 
 	slog.Info("Server banner updated")
