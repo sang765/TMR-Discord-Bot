@@ -7,7 +7,7 @@ Discord bot auto thay đổi server banner từ [konachan.net](https://konachan.
 - Auto thay đổi server banner (Boost Level 2+)
 - Random ảnh anime từ konachan.net hoặc zerochan.net
 - Hỗ trợ MoeWalls (video → GIF cho animated icon/banner)
-- Prefix commands (`!` và `.`)
+- Prefix commands (`!`)
 - Slash commands
 - Config file YAML
 - Lọc theo tags, rating, score

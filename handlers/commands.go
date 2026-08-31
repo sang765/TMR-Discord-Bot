@@ -26,14 +26,11 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 	content := m.Content
 	prefix := cfg.Bot.Prefix
 
-	if !strings.HasPrefix(content, prefix) && !strings.HasPrefix(content, ".") {
+	if !strings.HasPrefix(content, prefix) {
 		return
 	}
 
 	actualPrefix := prefix
-	if strings.HasPrefix(content, ".") {
-		actualPrefix = "."
-	}
 
 	args := strings.Fields(content[len(actualPrefix):])
 	if len(args) == 0 {
