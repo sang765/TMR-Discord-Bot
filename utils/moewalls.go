@@ -50,6 +50,7 @@ func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
 	} else {
 		pageURL = fmt.Sprintf("%s/page/%d/", moewallsCategoryURL, pageNum)
 	}
+	fmt.Printf("[MoeWalls] Random page: %d -> %s\n", pageNum, pageURL)
 
 	// Step 2: Scrape list page to get wallpaper URLs
 	wallpaperURLs, err := mc.scrapeListPage(pageURL)
@@ -59,22 +60,26 @@ func (mc *MoeWallsClient) GetRandomVideo() ([]byte, bool, error) {
 	if len(wallpaperURLs) == 0 {
 		return nil, false, fmt.Errorf("no wallpapers found on page %d", pageNum)
 	}
+	fmt.Printf("[MoeWalls] Found %d wallpapers on page %d\n", len(wallpaperURLs), pageNum)
 
 	// Step 3: Pick random wallpaper
 	randomIdx := rand.Intn(len(wallpaperURLs))
 	wallpaperURL := wallpaperURLs[randomIdx]
+	fmt.Printf("[MoeWalls] Picked wallpaper %d/%d: %s\n", randomIdx+1, len(wallpaperURLs), wallpaperURL)
 
 	// Step 4: Scrape individual page to get video URL
 	videoURL, err := mc.scrapeVideoURL(wallpaperURL)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get video URL: %w", err)
 	}
+	fmt.Printf("[MoeWalls] Video URL: %s\n", videoURL)
 
 	// Step 5: Download video
 	videoData, err := mc.downloadVideo(videoURL)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to download video: %w", err)
 	}
+	fmt.Printf("[MoeWalls] Downloaded %d bytes\n", len(videoData))
 
 	// Step 6: Resize to 1920x1080 if needed (using ffmpeg)
 	resized, err := ResizeVideo(videoData, 1920, 1080)
@@ -130,6 +135,8 @@ func (mc *MoeWallsClient) scrapeListPage(url string) ([]string, error) {
 
 // scrapeVideoURL extracts the video URL from a wallpaper page
 func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
+	fmt.Printf("[MoeWalls] Scraping video URL from: %s\n", pageURL)
+	
 	req, err := http.NewRequest("GET", pageURL, nil)
 	if err != nil {
 		return "", err
@@ -140,9 +147,12 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 
 	resp, err := mc.httpClient.Do(req)
 	if err != nil {
+		fmt.Printf("[MoeWalls] HTTP request failed: %v\n", err)
 		return "", err
 	}
 	defer resp.Body.Close()
+
+	fmt.Printf("[MoeWalls] Response status: %d\n", resp.StatusCode)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -150,11 +160,13 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 	}
 
 	bodyStr := string(body)
+	fmt.Printf("[MoeWalls] Page size: %d bytes\n", len(bodyStr))
 
 	// Pattern 1: <source src="/wp-content/uploads/preview/...webm"
 	re := regexp.MustCompile(`src="(/wp-content/uploads/preview/[^"]+\.(webm|mp4))"`)
 	matches := re.FindStringSubmatch(bodyStr)
 	if len(matches) >= 2 {
+		fmt.Printf("[MoeWalls] Pattern 1 matched: %s\n", matches[1])
 		return moewallsBaseURL + matches[1], nil
 	}
 
@@ -162,6 +174,7 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 	re2 := regexp.MustCompile(`src="(https?://[^"]+/preview/[^"]+\.(webm|mp4))"`)
 	matches2 := re2.FindStringSubmatch(bodyStr)
 	if len(matches2) >= 2 {
+		fmt.Printf("[MoeWalls] Pattern 2 matched: %s\n", matches2[1])
 		return matches2[1], nil
 	}
 
@@ -169,6 +182,7 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 	re3 := regexp.MustCompile(`data-src="(/wp-content/uploads/[^"]+\.(webm|mp4))"`)
 	matches3 := re3.FindStringSubmatch(bodyStr)
 	if len(matches3) >= 2 {
+		fmt.Printf("[MoeWalls] Pattern 3 matched: %s\n", matches3[1])
 		return moewallsBaseURL + matches3[1], nil
 	}
 
@@ -176,7 +190,31 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 	re4 := regexp.MustCompile(`"(https?://[^"]+\.(webm|mp4))"`)
 	matches4 := re4.FindStringSubmatch(bodyStr)
 	if len(matches4) >= 2 {
+		fmt.Printf("[MoeWalls] Pattern 4 matched: %s\n", matches4[1])
 		return matches4[1], nil
+	}
+
+	// Debug: show what we found
+	fmt.Printf("[MoeWalls] No video URL found. Searching for 'preview' in page...\n")
+	previewIdx := strings.Index(bodyStr, "preview")
+	if previewIdx >= 0 {
+		start := previewIdx - 100
+		if start < 0 {
+			start = 0
+		}
+		end := previewIdx + 200
+		if end > len(bodyStr) {
+			end = len(bodyStr)
+		}
+		fmt.Printf("[MoeWalls] Context around 'preview': ...%s...\n", bodyStr[start:end])
+	} else {
+		fmt.Printf("[MoeWalls] 'preview' not found in page\n")
+		// Show first 1000 chars of body for debugging
+		if len(bodyStr) > 1000 {
+			fmt.Printf("[MoeWalls] First 1000 chars: %s\n", bodyStr[:1000])
+		} else {
+			fmt.Printf("[MoeWalls] Full body: %s\n", bodyStr)
+		}
 	}
 
 	return "", fmt.Errorf("no video URL found on page")
