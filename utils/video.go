@@ -43,6 +43,7 @@ func getFFprobePath() string {
 
 // findBestLoopPoint analyzes video and finds where frame matches the first frame
 // Returns the duration (seconds) to cut the video for optimal looping
+// Uses 2-pass: coarse scan (0.5s) then fine scan (0.1s) around best match
 func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 	// Get video duration first
 	duration := getVideoDuration(data)
@@ -56,12 +57,41 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 		return duration
 	}
 	
-	// Sample frames every 0.5 seconds, find closest match to first frame
-	bestMatchTime := duration
-	bestSimilarity := 1.0 // Lower = more similar
+	// Pass 1: Coarse scan every 0.5s
+	bestCoarseTime := duration
+	bestCoarseSim := 1.0
 	
-	sampleInterval := 0.5
-	for t := sampleInterval; t < duration-0.5; t += sampleInterval {
+	for t := 0.5; t < duration-0.5; t += 0.5 {
+		frame := extractFrameAt(data, t)
+		if frame == nil {
+			continue
+		}
+		
+		similarity := compareFrames(firstFrame, frame)
+		if similarity < bestCoarseSim {
+			bestCoarseSim = similarity
+			bestCoarseTime = t
+			
+			if similarity < 0.10 {
+				break // Very good match, no need to continue
+			}
+		}
+	}
+	
+	// Pass 2: Fine scan around best coarse match (±0.5s, step 0.1s)
+	startTime := bestCoarseTime - 0.5
+	if startTime < 0.1 {
+		startTime = 0.1
+	}
+	endTime := bestCoarseTime + 0.5
+	if endTime >= duration {
+		endTime = duration - 0.1
+	}
+	
+	bestMatchTime := bestCoarseTime
+	bestSimilarity := bestCoarseSim
+	
+	for t := startTime; t <= endTime; t += 0.1 {
 		frame := extractFrameAt(data, t)
 		if frame == nil {
 			continue
@@ -72,9 +102,8 @@ func findBestLoopPoint(data []byte, maxDuration float64) float64 {
 			bestSimilarity = similarity
 			bestMatchTime = t
 			
-			// If very similar (>85%), use this as loop point
-			if similarity < 0.15 {
-				break
+			if similarity < 0.05 {
+				break // Excellent match
 			}
 		}
 	}
