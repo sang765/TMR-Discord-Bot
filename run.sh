@@ -21,6 +21,16 @@ else
     fi
 
     export GIT_TERMINAL_PROMPT=0
+    
+    # Use GitHub token if available for private repo
+    if [ -f "./.env" ]; then
+        GITHUB_TOKEN=$(grep -oP 'GITHUB_TOKEN=\K.*' ./.env 2>/dev/null)
+    fi
+    
+    if [ -n "$GITHUB_TOKEN" ]; then
+        git remote set-url origin "https://${GITHUB_TOKEN}@github.com/sang765/TMR-Discord-Bot.git"
+    fi
+    
     git fetch --all 2>&1 || echo "git fetch failed, continuing..."
     git reset --hard origin/main 2>&1 || echo "git reset failed, using local"
 
