@@ -134,7 +134,9 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 
 	resp, err := mc.httpClient.Do(req)
 	if err != nil {
@@ -147,19 +149,34 @@ func (mc *MoeWallsClient) scrapeVideoURL(pageURL string) (string, error) {
 		return "", err
 	}
 
-	// Look for source tag with video URL
-	// Pattern: <source src="/wp-content/uploads/preview/YYYY/slug-preview.webm"
-	re := regexp.MustCompile(`src="(/wp-content/uploads/preview/[^"]+\.webm)"`)
-	matches := re.FindStringSubmatch(string(body))
+	bodyStr := string(body)
+
+	// Pattern 1: <source src="/wp-content/uploads/preview/...webm"
+	re := regexp.MustCompile(`src="(/wp-content/uploads/preview/[^"]+\.(webm|mp4))"`)
+	matches := re.FindStringSubmatch(bodyStr)
 	if len(matches) >= 2 {
 		return moewallsBaseURL + matches[1], nil
 	}
 
-	// Try video src attribute
-	re2 := regexp.MustCompile(`src="(https?://[^"]+\.webm)"`)
-	matches2 := re2.FindStringSubmatch(string(body))
+	// Pattern 2: Full URL with preview
+	re2 := regexp.MustCompile(`src="(https?://[^"]+/preview/[^"]+\.(webm|mp4))"`)
+	matches2 := re2.FindStringSubmatch(bodyStr)
 	if len(matches2) >= 2 {
 		return matches2[1], nil
+	}
+
+	// Pattern 3: data-src or lazy load
+	re3 := regexp.MustCompile(`data-src="(/wp-content/uploads/[^"]+\.(webm|mp4))"`)
+	matches3 := re3.FindStringSubmatch(bodyStr)
+	if len(matches3) >= 2 {
+		return moewallsBaseURL + matches3[1], nil
+	}
+
+	// Pattern 4: Any video tag with webm/mp4
+	re4 := regexp.MustCompile(`"(https?://[^"]+\.(webm|mp4))"`)
+	matches4 := re4.FindStringSubmatch(bodyStr)
+	if len(matches4) >= 2 {
+		return matches4[1], nil
 	}
 
 	return "", fmt.Errorf("no video URL found on page")
