@@ -20,8 +20,9 @@ else
         cp ./.env ./.env.bak
     fi
 
-    git fetch --all
-    git reset --hard origin/main
+    export GIT_TERMINAL_PROMPT=0
+    git fetch --all 2>&1 || echo "git fetch failed, continuing..."
+    git reset --hard origin/main 2>&1 || echo "git reset failed, using local"
 
     # Restore config files after pull
     if [ -f "./config/config.yml.bak" ]; then
