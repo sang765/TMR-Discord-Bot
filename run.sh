@@ -56,6 +56,17 @@ if [ ! -f "./tmr-bot" ]; then
         rm /tmp/go.tar.gz
     fi
 
+    # Install ffmpeg if not present
+    if [ ! -f "/home/container/ffmpeg" ]; then
+        echo "Installing ffmpeg..."
+        wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -O /tmp/ffmpeg.tar.xz
+        tar -xf /tmp/ffmpeg.tar.xz -C /tmp
+        cp /tmp/ffmpeg-*-amd64-static/ffmpeg /home/container/ffmpeg
+        chmod +x /home/container/ffmpeg
+        rm -rf /tmp/ffmpeg*
+    fi
+
+    export PATH=/home/container:$PATH
     CGO_ENABLED=0 go build -o tmr-bot .
     if [ $? -ne 0 ]; then
         echo "Build failed!"
