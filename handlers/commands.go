@@ -13,6 +13,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// Rate limiter for Discord GuildEdit calls (~2 req/10s safe margin)
+var guildEditLimiter = utils.NewDiscordRateLimiter(1 * time.Second)
+
 func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient, guildID string) {
 	if m.Author.Bot {
 		return
@@ -284,6 +287,7 @@ func downloadAndSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, img *u
 	}
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(cropped))
+	guildEditLimiter.Wait()
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
@@ -302,6 +306,7 @@ func downloadAndSetIconFromURL(s *discordgo.Session, m *discordgo.MessageCreate,
 	}
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(cropped))
+	guildEditLimiter.Wait()
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
@@ -315,6 +320,7 @@ func downloadAndSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, img 
 	}
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(data))
+	guildEditLimiter.Wait()
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
@@ -334,6 +340,7 @@ func downloadAndSetBannerFromURL(s *discordgo.Session, m *discordgo.MessageCreat
 	}
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+	guildEditLimiter.Wait()
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
@@ -342,6 +349,7 @@ func downloadAndSetBannerFromURL(s *discordgo.Session, m *discordgo.MessageCreat
 
 func setAnimatedIcon(s *discordgo.Session, m *discordgo.MessageCreate, gifData []byte, guildID string) error {
 	dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+	guildEditLimiter.Wait()
 	_, err := s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
@@ -350,6 +358,7 @@ func setAnimatedIcon(s *discordgo.Session, m *discordgo.MessageCreate, gifData [
 
 func setAnimatedBanner(s *discordgo.Session, m *discordgo.MessageCreate, gifData []byte, guildID string) error {
 	dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+	guildEditLimiter.Wait()
 	_, err := s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
@@ -646,12 +655,17 @@ func sendMessageWithID(s *discordgo.Session, m *discordgo.MessageCreate, content
 }
 
 func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
-	member, err := s.GuildMember(guildID, userID)
+	// Try local state cache first (no API call)
+	member, err := s.State.Member(guildID, userID)
 	if err != nil {
-		return false
+		// Cache miss: fetch from API (1 request)
+		member, err = s.GuildMember(guildID, userID)
+		if err != nil {
+			return false
+		}
 	}
 
-	// Check Administrator first
+	// Check roles for Administrator or ManageGuild permissions
 	for _, roleID := range member.Roles {
 		role, err := s.State.Role(guildID, roleID)
 		if err != nil {

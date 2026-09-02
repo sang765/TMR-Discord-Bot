@@ -15,6 +15,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// Rate limiter for auto-change GuildEdit calls
+var autoGuildEditLimiter = utils.NewDiscordRateLimiter(1 * time.Second)
+
 func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
@@ -39,6 +42,9 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 		case <-ticker.C:
 			if cfg.Auto.BannerEnabled {
 				changeBanner(s, guildID, cfg, kc, zc, whc, mwc)
+			}
+			if cfg.Auto.IconEnabled {
+				changeIcon(s, guildID, cfg, kc, zc)
 			}
 		}
 
@@ -88,6 +94,7 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *ut
 	}
 
 	dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(cropped))
+	autoGuildEditLimiter.Wait()
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
@@ -125,6 +132,7 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			return
 		}
 		dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+		autoGuildEditLimiter.Wait()
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
@@ -154,6 +162,7 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			return
 		}
 		dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+		autoGuildEditLimiter.Wait()
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
@@ -168,6 +177,7 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			return
 		}
 		dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+		autoGuildEditLimiter.Wait()
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
@@ -193,6 +203,7 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			return
 		}
 		dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+		autoGuildEditLimiter.Wait()
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
