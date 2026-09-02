@@ -18,6 +18,14 @@ import (
 // Rate limiter for auto-change GuildEdit calls
 var autoGuildEditLimiter = utils.NewDiscordRateLimiter(1 * time.Second)
 
+// RPS monitor reference (set from main)
+var autoRPSMonitor *utils.RPSMonitor
+
+// SetAutoRPSMonitor sets the RPS monitor for the auto package.
+func SetAutoRPSMonitor(m *utils.RPSMonitor) {
+	autoRPSMonitor = m
+}
+
 func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
@@ -98,6 +106,9 @@ func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *ut
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
+	if autoRPSMonitor != nil {
+		autoRPSMonitor.Record(utils.APIGuildEdit)
+	}
 	if err != nil {
 		slog.Error("Failed to set icon", slog.Any("error", err))
 		return
@@ -136,6 +147,9 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
+		if autoRPSMonitor != nil {
+			autoRPSMonitor.Record(utils.APIGuildEdit)
+		}
 		if err != nil {
 			slog.Error("Failed to set banner", slog.Any("error", err))
 			return
@@ -166,6 +180,9 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
+		if autoRPSMonitor != nil {
+			autoRPSMonitor.Record(utils.APIGuildEdit)
+		}
 		if err != nil {
 			slog.Error("Failed to set banner", slog.Any("error", err))
 			return
@@ -181,6 +198,9 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
+		if autoRPSMonitor != nil {
+			autoRPSMonitor.Record(utils.APIGuildEdit)
+		}
 		if err != nil {
 			slog.Error("Failed to set animated banner", slog.Any("error", err))
 			return
@@ -207,6 +227,9 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 		_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 			Banner: dataURI,
 		})
+		if autoRPSMonitor != nil {
+			autoRPSMonitor.Record(utils.APIGuildEdit)
+		}
 		if err != nil {
 			slog.Error("Failed to set banner", slog.Any("error", err))
 			return

@@ -16,6 +16,14 @@ import (
 // Rate limiter for Discord GuildEdit calls (~2 req/10s safe margin)
 var guildEditLimiter = utils.NewDiscordRateLimiter(1 * time.Second)
 
+// RPS monitor for tracking Discord API calls
+var rpsMonitor *utils.RPSMonitor
+
+// SetRPSMonitor sets the RPS monitor for this package.
+func SetRPSMonitor(m *utils.RPSMonitor) {
+	rpsMonitor = m
+}
+
 func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, whc *utils.WallhavenClient, mwc *utils.MoeWallsClient, guildID string) {
 	if m.Author.Bot {
 		return
@@ -109,6 +117,8 @@ func MessageHandler(s *discordgo.Session, m *discordgo.MessageCreate, cfg *confi
 		} else {
 			sendMessage(s, m, fmt.Sprintf("Current min score: %d", cfg.Konachan.MinScore))
 		}
+	case "rps":
+		handleRPSCheck(s, m)
 	default:
 		sendMessage(s, m, fmt.Sprintf("Unknown command: %s. Use %shelp for help.", cmd, actualPrefix))
 	}
@@ -120,7 +130,8 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"**General:**\n"+
 		"`%shelp` - Show this help\n"+
 		"`%sboost` - Check server boost level\n"+
-		"`%sconfig` - Show bot config\n\n"+
+		"`%sconfig` - Show bot config\n"+
+		"`%srps` - Check current Discord API RPS\n\n"+
 		"**Image Commands:**\n"+
 		"`%sseticon` - Set server icon from current source\n"+
 		"`%ssetbanner` - Set server banner from current source\n\n"+
@@ -140,7 +151,7 @@ func sendHelp(s *discordgo.Session, m *discordgo.MessageCreate, cfg *config.Conf
 		"Powered by konachan.net & zerochan.net",
 		prefix, prefix, prefix, prefix, prefix,
 		prefix, prefix, prefix, prefix, prefix, prefix,
-		prefix, prefix, prefix, prefix)
+		prefix, prefix, prefix, prefix, prefix)
 
 	sendMessage(s, m, content)
 }
@@ -291,6 +302,9 @@ func downloadAndSetIcon(s *discordgo.Session, m *discordgo.MessageCreate, img *u
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuildEdit)
+	}
 	return err
 }
 
@@ -310,6 +324,9 @@ func downloadAndSetIconFromURL(s *discordgo.Session, m *discordgo.MessageCreate,
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuildEdit)
+	}
 	return err
 }
 
@@ -324,6 +341,9 @@ func downloadAndSetBanner(s *discordgo.Session, m *discordgo.MessageCreate, img 
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuildEdit)
+	}
 	return err
 }
 
@@ -344,6 +364,9 @@ func downloadAndSetBannerFromURL(s *discordgo.Session, m *discordgo.MessageCreat
 	_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuildEdit)
+	}
 	return err
 }
 
@@ -353,6 +376,9 @@ func setAnimatedIcon(s *discordgo.Session, m *discordgo.MessageCreate, gifData [
 	_, err := s.GuildEdit(guildID, &discordgo.GuildParams{
 		Icon: dataURI,
 	})
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuildEdit)
+	}
 	return err
 }
 
@@ -362,6 +388,9 @@ func setAnimatedBanner(s *discordgo.Session, m *discordgo.MessageCreate, gifData
 	_, err := s.GuildEdit(guildID, &discordgo.GuildParams{
 		Banner: dataURI,
 	})
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuildEdit)
+	}
 	return err
 }
 
@@ -378,6 +407,9 @@ func downloadImage(url string) ([]byte, error) {
 
 func handleBoostCheck(s *discordgo.Session, m *discordgo.MessageCreate, guildID string) {
 	guild, err := s.Guild(guildID)
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIGuild)
+	}
 	if err != nil {
 		sendMessage(s, m, fmt.Sprintf("Error fetching guild: %v", err))
 		return
@@ -638,16 +670,34 @@ func handleSetSource(s *discordgo.Session, m *discordgo.MessageCreate, cfg *conf
 	}
 }
 
+func handleRPSCheck(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if rpsMonitor == nil {
+		sendMessage(s, m, "RPS monitor not initialized")
+		return
+	}
+	summary := rpsMonitor.GetSummary(30) // last 30 seconds
+	sendMessage(s, m, fmt.Sprintf("```%s```", summary))
+}
+
 func sendMessage(s *discordgo.Session, m *discordgo.MessageCreate, content string) {
 	s.ChannelMessageSend(m.ChannelID, content)
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIChannelMessageSend)
+	}
 }
 
 func editMessage(s *discordgo.Session, m *discordgo.MessageCreate, msgID string, content string) {
 	s.ChannelMessageEdit(m.ChannelID, msgID, content)
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIChannelMessageEdit)
+	}
 }
 
 func sendMessageWithID(s *discordgo.Session, m *discordgo.MessageCreate, content string) string {
 	msg, _ := s.ChannelMessageSend(m.ChannelID, content)
+	if rpsMonitor != nil {
+		rpsMonitor.Record(utils.APIChannelMessageSend)
+	}
 	if msg != nil {
 		return msg.ID
 	}
@@ -657,11 +707,18 @@ func sendMessageWithID(s *discordgo.Session, m *discordgo.MessageCreate, content
 func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
 	// Try local state cache first (no API call)
 	member, err := s.State.Member(guildID, userID)
-	if err != nil {
+	if err == nil {
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIStateMember)
+		}
+	} else {
 		// Cache miss: fetch from API (1 request)
 		member, err = s.GuildMember(guildID, userID)
 		if err != nil {
 			return false
+		}
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIGuildMember)
 		}
 	}
 
@@ -670,6 +727,9 @@ func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
 		role, err := s.State.Role(guildID, roleID)
 		if err != nil {
 			continue
+		}
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIStateRole)
 		}
 		if role.Permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
 			return true
@@ -700,6 +760,9 @@ func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cf
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIInteractionRespond)
+		}
 		return
 	}
 
@@ -713,6 +776,9 @@ func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cf
 				Content: "Fetching random icon...",
 			},
 		})
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIInteractionRespond)
+		}
 	case "setbanner":
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -720,6 +786,9 @@ func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cf
 				Content: "Fetching random banner...",
 			},
 		})
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIInteractionRespond)
+		}
 	case "boost":
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -727,6 +796,9 @@ func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cf
 				Content: "Checking boost level...",
 			},
 		})
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIInteractionRespond)
+		}
 	case "help":
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -738,5 +810,8 @@ func InteractionHandler(s *discordgo.Session, i *discordgo.InteractionCreate, cf
 					"`/help` - Show this help",
 			},
 		})
+		if rpsMonitor != nil {
+			rpsMonitor.Record(utils.APIInteractionRespond)
+		}
 	}
 }

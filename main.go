@@ -61,6 +61,13 @@ func main() {
 	wallhavenClient := utils.NewWallhavenClient("")
 	moewallsClient := utils.NewMoeWallsClient()
 
+	// Start RPS monitor (warn at 5 RPS, threshold for Discord rate limits)
+	rpsMonitor := utils.NewRPSMonitor(5.0)
+	go rpsMonitor.Start()
+	defer rpsMonitor.Stop()
+	handlers.SetRPSMonitor(rpsMonitor)
+	handlers.SetAutoRPSMonitor(rpsMonitor)
+
 	dg, err := discordgo.New("Bot " + env.DiscordToken)
 	if err != nil {
 		log.Fatal("Error creating Discord session: ", err)
