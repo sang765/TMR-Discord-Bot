@@ -52,7 +52,7 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 				changeBanner(s, guildID, cfg, kc, zc, whc, mwc)
 			}
 			if cfg.Auto.IconEnabled {
-				changeIcon(s, guildID, cfg, kc, zc)
+				changeIcon(s, guildID, cfg, kc, zc, mwc)
 			}
 		}
 
@@ -66,12 +66,50 @@ func AutoChangeLoop(ctx context.Context, s *discordgo.Session, guildID string, c
 	}
 }
 
-func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient) {
+func changeIcon(s *discordgo.Session, guildID string, cfg *config.Config, kc *utils.KonachanClient, zc *utils.ZerochanClient, mwc *utils.MoeWallsClient) {
 	slog.Info("Changing server icon...")
 
 	var imgURL string
 
 	switch cfg.Source {
+	case "moewalls":
+		// Check if server has ANIMATED_ICON feature
+		boostInfo, err := utils.GetGuildBoostInfo(s, guildID)
+		if err != nil {
+			slog.Error("Failed to check boost level", slog.Any("error", err))
+			return
+		}
+		if !boostInfo.CanSetAnimatedIcon() {
+			slog.Warn("Server lacks ANIMATED_ICON feature, falling back to konachan")
+			// Fall back to konachan
+			iconKC := utils.NewKonachanClient(cfg.Konachan.IconTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
+			img, err := iconKC.GetRandomImage()
+			if err != nil {
+				slog.Error("Failed to fetch icon from konachan (fallback)", slog.Any("error", err))
+				return
+			}
+			imgURL = img.FileURL
+		} else {
+			gifData, _, err := mwc.GetRandomVideo()
+			if err != nil {
+				slog.Error("Failed to fetch video from moewalls", slog.Any("error", err))
+				return
+			}
+			dataURI := fmt.Sprintf("data:image/gif;base64,%s", encodeBase64(gifData))
+			autoGuildEditLimiter.Wait()
+			_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+				Icon: dataURI,
+			})
+			if autoRPSMonitor != nil {
+				autoRPSMonitor.Record(utils.APIGuildEdit)
+			}
+			if err != nil {
+				slog.Error("Failed to set animated icon", slog.Any("error", err))
+				return
+			}
+			slog.Info("Server icon updated (animated)")
+			return
+		}
 	case "zerochan":
 		entry, err := zc.GetRandomImage()
 		if err != nil {
@@ -188,6 +226,46 @@ func changeBanner(s *discordgo.Session, guildID string, cfg *config.Config, kc *
 			return
 		}
 	case "moewalls":
+		// Check if server has enough boost for animated banner (Tier 3+)
+		boostInfo, err := utils.GetGuildBoostInfo(s, guildID)
+		if err != nil {
+			slog.Error("Failed to check boost level", slog.Any("error", err))
+			return
+		}
+		if !boostInfo.CanSetAnimatedBanner() {
+			slog.Warn("Server lacks boost level 3 for animated banner, falling back to konachan",
+				slog.Int("current_level", boostInfo.Level))
+			// Fall back to konachan static image
+			bannerKC := utils.NewKonachanClient(cfg.Konachan.BannerTags, cfg.Konachan.Rating, cfg.Konachan.MinScore)
+			img, err := bannerKC.GetRandomImage()
+			if err != nil {
+				slog.Error("Failed to fetch banner from konachan (fallback)", slog.Any("error", err))
+				return
+			}
+			data, err := downloadImageForAuto(img.FileURL)
+			if err != nil {
+				slog.Error("Failed to download banner image (fallback)", slog.Any("error", err))
+				return
+			}
+			compressed, err := utils.CompressToUnderLimit(data)
+			if err != nil {
+				slog.Error("Failed to compress banner image (fallback)", slog.Any("error", err))
+				return
+			}
+			dataURI := fmt.Sprintf("data:image/jpeg;base64,%s", encodeBase64(compressed))
+			autoGuildEditLimiter.Wait()
+			_, err = s.GuildEdit(guildID, &discordgo.GuildParams{
+				Banner: dataURI,
+			})
+			if autoRPSMonitor != nil {
+				autoRPSMonitor.Record(utils.APIGuildEdit)
+			}
+			if err != nil {
+				slog.Error("Failed to set banner (fallback)", slog.Any("error", err))
+				return
+			}
+			return
+		}
 		gifData, _, err := mwc.GetRandomVideo()
 		if err != nil {
 			slog.Error("Failed to fetch video from moewalls", slog.Any("error", err))
