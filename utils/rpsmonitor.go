@@ -66,6 +66,7 @@ func (m *RPSMonitor) Start() {
 	defer ticker.Stop()
 
 	var prevTotal int64
+	prevCounts := make(map[string]int64)
 	for {
 		select {
 		case <-m.stopCh:
@@ -75,7 +76,12 @@ func (m *RPSMonitor) Start() {
 			rps := float64(current - prevTotal)
 			prevTotal = current
 
-			snapshot := m.snapshot(rps)
+			snapshot := m.snapshot(rps, prevCounts)
+
+			// Update prevCounts for next iteration
+			for name, c := range m.counters {
+				prevCounts[name] = c.Load()
+			}
 
 			// Keep last 60 snapshots (1 minute window)
 			m.historyMu.Lock()
@@ -142,12 +148,13 @@ func (m *RPSMonitor) total() int64 {
 	return total
 }
 
-func (m *RPSMonitor) snapshot(rps float64) rpsSnapshot {
+func (m *RPSMonitor) snapshot(rps float64, prevCounts map[string]int64) rpsSnapshot {
 	breakdown := make(map[string]int64)
 	for name, c := range m.counters {
 		v := c.Load()
-		if v > 0 {
-			breakdown[name] = v
+		prev := prevCounts[name]
+		if v > prev {
+			breakdown[name] = v - prev
 		}
 	}
 	return rpsSnapshot{
@@ -155,6 +162,12 @@ func (m *RPSMonitor) snapshot(rps float64) rpsSnapshot {
 		totalRPS:  rps,
 		breakdown:  breakdown,
 	}
+}
+
+// RecordNoCount increments the counter but does NOT count toward RPS.
+// Use for local cache lookups (e.g., State.Role) that don't hit Discord API.
+func (m *RPSMonitor) RecordNoCount(callType string) {
+	// Intentionally empty - tracks for debugging only, not RPS
 }
 
 func (m *RPSMonitor) logWarning(rps float64, breakdown map[string]int64) {

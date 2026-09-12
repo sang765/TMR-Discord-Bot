@@ -707,11 +707,7 @@ func sendMessageWithID(s *discordgo.Session, m *discordgo.MessageCreate, content
 func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
 	// Try local state cache first (no API call)
 	member, err := s.State.Member(guildID, userID)
-	if err == nil {
-		if rpsMonitor != nil {
-			rpsMonitor.Record(utils.APIStateMember)
-		}
-	} else {
+	if err != nil {
 		// Cache miss: fetch from API (1 request)
 		member, err = s.GuildMember(guildID, userID)
 		if err != nil {
@@ -728,9 +724,8 @@ func hasManageServerOrAdmin(s *discordgo.Session, userID, guildID string) bool {
 		if err != nil {
 			continue
 		}
-		if rpsMonitor != nil {
-			rpsMonitor.Record(utils.APIStateRole)
-		}
+		// Note: State.Role is a local cache lookup, not an API call
+		// Don't count it toward RPS
 		if role.Permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
 			return true
 		}
