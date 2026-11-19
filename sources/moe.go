@@ -55,7 +55,7 @@ func chapToManga(path string) string {
 // Fetch implements Fetcher.
 func (m *Moe) Fetch(seed bool) ([]Item, error) {
 	url := strings.TrimRight(m.Base, "/") + m.TeamPath
-	req, err := newRequest("GET", url)
+	req, err := newBrowserRequest("GET", url)
 	if err != nil {
 		return nil, err
 	}
@@ -70,14 +70,18 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 	if len(parsed) == 0 {
 		if jb, jerr := JinaGet(url, "html"); jerr == nil {
 			parsed = m.parse(jb)
-		} else if err != nil {
-			return nil, fmtErr("direct: %v; jina: %v", err, jerr)
-		} else {
-			return nil, fmtErr("HTTP %d; jina: %v", code, jerr)
 		}
 	}
 	if len(parsed) == 0 {
-		return nil, fmtErr("không tìm thấy mục cập nhật nào trên trang nhóm (kể cả qua jina)")
+		// kèm đoạn đầu body để lần sau nhìn log là biết server trả gì
+		snippet := strings.TrimSpace(body)
+		if len(snippet) > 160 {
+			snippet = snippet[:160]
+		}
+		if err != nil {
+			return nil, fmtErr("direct: %v (jina cũng lỗi)", err)
+		}
+		return nil, fmtErr("HTTP %d, không parse được cập nhật; body đầu: %.160s", code, snippet)
 	}
 
 	now := time.Now()

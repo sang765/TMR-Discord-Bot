@@ -46,7 +46,7 @@ func (c *CuuTruyen) pageURL() string {
 }
 
 func (c *CuuTruyen) getDirect(url string) (string, int, error) {
-	req, err := newRequest("GET", url)
+	req, err := newBrowserRequest("GET", url)
 	if err != nil {
 		return "", 0, err
 	}

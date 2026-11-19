@@ -64,7 +64,7 @@ func (d *DocLn) getDirect(url string) (string, error) {
 		doclnLast = time.Now()
 		doclnMu.Unlock()
 
-		req, err := newRequest("GET", url)
+		req, err := newBrowserRequest("GET", url)
 		if err != nil {
 			return "", err
 		}
@@ -202,6 +202,18 @@ func (d *DocLn) Fetch(seed bool) ([]Item, error) {
 		if seenSeries && !s.LastUpdate.IsZero() && !d.storeTimeAfter(sKey, s.LastUpdate) {
 			continue // nothing new for this series
 		}
+		if seenSeries && s.LastUpdate.IsZero() {
+			continue // đã thấy rồi nhưng không có mốc thời gian — khỏi fetch lại
+		}
+
+		// series "ngủ đông" (không cập nhật > 7 ngày): chỉ đánh dấu, khỏi fetch
+		// trang chi tiết — tiết kiệm request (và jina rate limit) khi seed
+		if !s.LastUpdate.IsZero() && time.Since(s.LastUpdate) > 7*24*time.Hour {
+			if !seenSeries {
+				d.Store.Mark(sKey, now)
+			}
+			continue
+		}
 
 		cover, desc, chaps, derr := d.fetchDetail(s)
 		if derr != nil {
@@ -266,5 +278,3 @@ func (d *DocLn) storeTimeAfter(key string, t time.Time) bool {
 	}
 	return t.After(st)
 }
-
-var _ = strings.TrimSpace

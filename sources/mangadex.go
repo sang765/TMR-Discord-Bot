@@ -101,6 +101,7 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 	}
 	api := "https://api.mangadex.org/chapter?" + q.Encode()
 
+	// API của MangaDex CHẾ request giả browser (challenge) — dùng header API thẳng
 	req, _ := newRequest("GET", api)
 	body, code, err := doRequest(req)
 	if err != nil {
