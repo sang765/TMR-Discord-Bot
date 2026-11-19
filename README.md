@@ -20,7 +20,11 @@ Mỗi 15 phút (tuỳ chỉnh) bot quét:
 
 - **Ping role** `@PING TRUYỆN MỚI VÀ CHAP MỚI` trong mỗi thông báo.
 - **Không spam mục cũ**: lần chạy đầu bot chỉ "học" dữ liệu nền, từ lần sau mới báo mục mới (mới hơn 72h).
-- **Trùng nguồn thì bỏ qua**: cùng một truyện + cùng số chap từ 2 nguồn trong vòng 6h chỉ báo 1 lần.
+- **Gộp link nhiều nền tảng**: cùng một truyện + cùng sốchap từ nguồn khác lên sau → bot **edit tin nhắn cũ**,
+  thêm dòng "🔗 Cũng có tại: [MangaDex](...) • [Cứu Truyện](...)" (giống style team tự viết
+  "cuu - mgd - moe - fb"). Bot so khớp theo tên truyện đã chuẩn hoá — MD thường có tên VI trong
+  alt titles nên khớp được; nếu MD đặt tên khác hẳn (không có alt title VI) thì sẽ thành tin riêng.
+  Tắt bằng `merge_links: false` (khi đó trùng trong 6h sẽ bị bỏ qua hoàn toàn).
 - **Kênh status**: bot báo online + lỗi nguồn (tối đa 1 lần/giờ/nguồn) vào `#novel-status`.
 
 ## Cài đặt trên server

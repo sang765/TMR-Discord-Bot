@@ -15,12 +15,23 @@ type Store struct {
 	st state
 }
 
+// PostedEntry records a message the bot sent, so later duplicates from
+// other sources can be merged into it by editing.
+type PostedEntry struct {
+	ChannelID string            `json:"channel_id"`
+	MessageID string            `json:"message_id"`
+	Links     map[string]string `json:"links"` // source display name -> url
+	Base      json.RawMessage   `json:"base"`  // original discord.Message JSON
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
 type state struct {
-	Seen      map[string]time.Time `json:"seen"`
-	Announced map[string]time.Time `json:"announced"`
-	LastErr   map[string]time.Time `json:"last_error_post"`
-	LastPoll  map[string]time.Time `json:"last_poll"`
-	Seeded    bool                 `json:"seeded"`
+	Seen      map[string]time.Time    `json:"seen"`
+	Announced map[string]time.Time    `json:"announced"`
+	Posted    map[string]PostedEntry  `json:"posted"`
+	LastErr   map[string]time.Time    `json:"last_error_post"`
+	LastPoll  map[string]time.Time    `json:"last_poll"`
+	Seeded    bool                    `json:"seeded"`
 }
 
 // Open loads the store from path (creating parent dirs).
@@ -28,6 +39,7 @@ func Open(path string) (*Store, error) {
 	s := &Store{st: state{
 		Seen:      map[string]time.Time{},
 		Announced: map[string]time.Time{},
+		Posted:    map[string]PostedEntry{},
 		LastErr:   map[string]time.Time{},
 		LastPoll:  map[string]time.Time{},
 	}}
@@ -43,6 +55,7 @@ func Open(path string) (*Store, error) {
 		return &Store{st: state{
 			Seen:      map[string]time.Time{},
 			Announced: map[string]time.Time{},
+			Posted:    map[string]PostedEntry{},
 			LastErr:   map[string]time.Time{},
 			LastPoll:  map[string]time.Time{},
 		}}, nil
@@ -59,6 +72,9 @@ func Open(path string) (*Store, error) {
 	if s.st.LastPoll == nil {
 		s.st.LastPoll = map[string]time.Time{}
 	}
+	if s.st.Posted == nil {
+		s.st.Posted = map[string]PostedEntry{}
+	}
 	return s, nil
 }
 
@@ -72,6 +88,11 @@ func (s *Store) Save(path string) error {
 			if t.Before(cutoff) {
 				delete(m, k)
 			}
+		}
+	}
+	for k, e := range s.st.Posted {
+		if e.UpdatedAt.Before(cutoff) {
+			delete(s.st.Posted, k)
 		}
 	}
 	data, err := json.MarshalIndent(&s.st, "", " ")
@@ -119,6 +140,21 @@ func (s *Store) MarkAnnounced(key string, t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.st.Announced[key] = t
+}
+
+// GetPosted returns the posted message entry for a dedup key.
+func (s *Store) GetPosted(key string) (PostedEntry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.st.Posted[key]
+	return e, ok
+}
+
+// SetPosted records/updates the posted message entry for a dedup key.
+func (s *Store) SetPosted(key string, e PostedEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.Posted[key] = e
 }
 
 // AnnouncedWithin reports whether key was announced within window.

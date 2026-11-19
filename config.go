@@ -34,7 +34,11 @@ type Config struct {
 	// Only announce items published within this many hours (default 72).
 	MaxAgeHours int `yaml:"max_age_hours"`
 	// Cross-source dedup window in hours (default 6).
+	// Chỉ dùng khi merge_links = false.
 	DedupHours int `yaml:"dedup_hours"`
+	// Khi nguồn khác có cùng truyện+chap: edit tin nhắn cũ để gắn thêm link
+	// thay vì gửi tin mới (mặc định bật).
+	MergeLinks bool `yaml:"merge_links"`
 	// DocLn group pages to scan (25 series per page, default 2).
 	DocLnPages int `yaml:"docln_pages"`
 	// MangaDex feed size (default 50).
@@ -72,6 +76,7 @@ func LoadConfig(path string) (*Config, error) {
 		PollIntervalMin:  15,
 		MaxAgeHours:      72,
 		DedupHours:       6,
+		MergeLinks:       true,
 		DocLnPages:       2,
 		MangaDexLimit:    50,
 		DocLnGroupID:     "3474",

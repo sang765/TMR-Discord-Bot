@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -101,6 +102,7 @@ type app struct {
 	st       *store.Store
 	dc       *discord.Client
 	dry      bool
+	drySeq   int
 	fetchers []sources.Fetcher
 }
 
@@ -269,6 +271,8 @@ func (a *app) maybeReportError(source string, err error) {
 }
 
 // announce filters and sends one item.
+// Khi merge_links bật: nếu truyện+chap này đã được thông báo từ nguồn khác,
+// bot EDIT tin nhắn cũ để gắn thêm link nguồn mới (kiểu "cuu - mgd - moe - fb").
 func (a *app) announce(it sources.Item) error {
 	cutoff := time.Now().Add(-time.Duration(a.cfg.MaxAgeHours) * time.Hour)
 	if !it.Published.IsZero() && it.Published.Before(cutoff) {
@@ -276,14 +280,9 @@ func (a *app) announce(it sources.Item) error {
 	}
 
 	dedupKey := sources.NormTitle(it.Title)
-	if it.Kind == sources.KindChapter {
+	if it.Chapter != "" {
 		dedupKey += "|c" + sources.ChapterNorm(it.Chapter)
 	}
-	if a.st.AnnouncedWithin(dedupKey, time.Duration(a.cfg.DedupHours)*time.Hour) {
-		log.Printf("  bỏ qua (trùng nguồn khác): %s %s", it.Title, it.Chapter)
-		return nil
-	}
-	a.st.MarkAnnounced(dedupKey, time.Now())
 
 	var channelID string
 	switch {
@@ -301,16 +300,102 @@ func (a *app) announce(it sources.Item) error {
 	}
 
 	msg := buildMessage(a.cfg.RoleID, it)
+	srcName := sourceNames[it.Source]
+
+	if a.cfg.MergeLinks {
+		if entry, ok := a.st.GetPosted(dedupKey); ok {
+			return a.mergeInto(entry, dedupKey, srcName, it.URL, it.Title, it.Chapter)
+		}
+	}
+
+	// legacy dedup (khi merge_links = false)
+	if !a.cfg.MergeLinks {
+		if a.st.AnnouncedWithin(dedupKey, time.Duration(a.cfg.DedupHours)*time.Hour) {
+			log.Printf("  bỏ qua (trùng nguồn khác): %s %s", it.Title, it.Chapter)
+			return nil
+		}
+		a.st.MarkAnnounced(dedupKey, time.Now())
+	}
+
 	if a.dry {
-		fmt.Printf("DRY → #%s\n%s\n  embed: %s\n  cover: %s\n\n",
-			channelID, msg.Content, embedSummary(msg), it.CoverURL)
+		id := fmt.Sprintf("dry-%d", a.drySeq)
+		a.drySeq++
+		fmt.Printf("DRY GỬI MỚI → #%s [%s]\n%s\n  embed: %s\n  cover: %s\n\n",
+			channelID, id, msg.Content, embedSummary(msg), it.CoverURL)
+		a.recordPosted(dedupKey, channelID, id, srcName, it.URL, msg)
 		return nil
 	}
-	_, err := a.dc.SendMessage(channelID, msg)
-	if err == nil {
-		time.Sleep(800 * time.Millisecond) // nhẹ nhàng với rate limit
+
+	id, err := a.dc.SendMessage(channelID, msg)
+	if err != nil {
+		return err
 	}
-	return err
+	a.recordPosted(dedupKey, channelID, id, srcName, it.URL, msg)
+	time.Sleep(800 * time.Millisecond) // nhẹ nhàng với rate limit
+	return nil
+}
+
+func (a *app) recordPosted(dedupKey, channelID, messageID, srcName, url string, msg discord.Message) {
+	base, _ := json.Marshal(msg)
+	a.st.SetPosted(dedupKey, store.PostedEntry{
+		ChannelID: channelID,
+		MessageID: messageID,
+		Links:     map[string]string{srcName: url},
+		Base:      base,
+		UpdatedAt: time.Now(),
+	})
+}
+
+// mergeInto edits the original message to append the new source link.
+func (a *app) mergeInto(entry store.PostedEntry, dedupKey, srcName, url, title, chapter string) error {
+	if entry.Links == nil {
+		entry.Links = map[string]string{}
+	}
+	if _, seen := entry.Links[srcName]; seen {
+		return nil // nguồn này đã có link rồi
+	}
+	entry.Links[srcName] = url
+
+	var base discord.Message
+	if len(entry.Base) > 0 {
+		if err := json.Unmarshal(entry.Base, &base); err != nil {
+			log.Printf("  merge: không đọc lại tin nhắn gốc: %v", err)
+			return nil
+		}
+	}
+
+	// dòng link: "🔗 Cũng có tại: [MangaDex](...) • [Mòe Truyện](...)"
+	parts := make([]string, 0, len(entry.Links))
+	for name, link := range entry.Links {
+		parts = append(parts, fmt.Sprintf("[%s](%s)", name, link))
+	}
+	sort.Strings(parts)
+	linksLine := "🔗 **Cũng có tại:** " + strings.Join(parts, " • ")
+
+	if len(base.Embeds) > 0 {
+		desc := strings.TrimSpace(base.Embeds[0].Description)
+		// gỡ dòng linksLine cũ (nếu có) rồi thêm dòng mới
+		if i := strings.Index(desc, "🔗 **Cũng có tại:**"); i >= 0 {
+			desc = strings.TrimSpace(desc[:i])
+		}
+		base.Embeds[0].Description = joinNonEmpty("\n\n", desc, linksLine)
+	} else {
+		base.Content = strings.TrimSpace(base.Content) + "\n\n" + linksLine
+	}
+
+	if a.dry {
+		fmt.Printf("DRY EDIT → #%s [%s] (%s %s)\n  thêm: %s\n  mô tả: %s\n\n",
+			entry.ChannelID, entry.MessageID, title, chapter, linksLine,
+			embedSummary(base))
+	} else {
+		if err := a.dc.PatchMessage(entry.ChannelID, entry.MessageID, base); err != nil {
+			log.Printf("  merge vào tin cũ thất bại (%s %s): %v", title, chapter, err)
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	a.st.SetPosted(dedupKey, entry)
+	return nil
 }
 
 var sourceNames = map[string]string{

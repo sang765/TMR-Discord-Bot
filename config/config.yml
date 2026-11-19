@@ -17,7 +17,9 @@ poll_interval_min: 15
 
 # Chỉ thông báo mục đăng trong vòng N giờ gần nhất (tránh spam mục cũ)
 max_age_hours: 72
-# Trùng (cùng truyện + cùng số chap từ nguồn khác) trong N giờ thì bỏ qua
+# Cùng 1 truyện/chap up thêm nền tảng khác → edit tin nhắn cũ, gắn thêm link
+merge_links: true
+# Chỉ dùng khi merge_links = false: trùng trong N giờ thì bỏ qua
 dedup_hours: 6
 
 # Nguồn

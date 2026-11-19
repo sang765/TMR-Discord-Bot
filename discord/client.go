@@ -96,6 +96,49 @@ func (c *Client) SendMessage(channelID string, msg Message) (string, error) {
 	return "", fmt.Errorf("discord rate limited sau 3 lần thử")
 }
 
+// PatchMessage edits an existing message (content + embeds).
+func (c *Client) PatchMessage(channelID, messageID string, msg Message) error {
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages/%s", channelID, messageID)
+
+	for attempt := 0; attempt < 3; attempt++ {
+		req, err := http.NewRequest("PATCH", url, bytes.NewReader(payload))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bot "+c.Token)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			return err
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+
+		switch {
+		case resp.StatusCode >= 200 && resp.StatusCode < 300:
+			return nil
+		case resp.StatusCode == 429:
+			var rl struct {
+				RetryAfter float64 `json:"retry_after"`
+			}
+			_ = json.Unmarshal(body, &rl)
+			if rl.RetryAfter <= 0 {
+				rl.RetryAfter = 1
+			}
+			time.Sleep(time.Duration(rl.RetryAfter*1000) * time.Millisecond)
+			continue
+		default:
+			return fmt.Errorf("discord PATCH HTTP %d: %.200s", resp.StatusCode, body)
+		}
+	}
+	return fmt.Errorf("discord rate limited sau 3 lần thử (PATCH)")
+}
+
 // MentionRole renders a role mention.
 func MentionRole(roleID string) string {
 	if roleID == "" {
