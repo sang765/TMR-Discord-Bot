@@ -1,12 +1,18 @@
 #!/bin/bash
+# TMR Discord Bot — start script (container / VPS)
+set -u
 
-cd /home/container
+cd /home/container || exit 1
 
+REPO_URL="https://github.com/sang765/TMR-Discord-Bot.git"
+
+# ---------------------------------------------------------------
+# 1) Lấy code mới nhất
+# ---------------------------------------------------------------
 if [ ! -d ".git" ]; then
     echo "Cloning from git..."
-    git clone https://github.com/sang765/TMR-Discord-Bot.git /tmp/repo
-    cp -r /tmp/repo/* /home/container/
-    cp -r /tmp/repo/.* /home/container/ 2>/dev/null
+    git clone "$REPO_URL" /tmp/repo || { echo "git clone failed!"; exit 1; }
+    cp -a /tmp/repo/. /home/container/
     rm -rf /tmp/repo
 else
     echo "Pulling latest changes..."
@@ -21,18 +27,24 @@ else
     fi
 
     export GIT_TERMINAL_PROMPT=0
-    
+    ORIG_URL=$(git remote get-url origin)
+
     # Use GitHub token if available for private repo
+    GITHUB_TOKEN=""
     if [ -f "./.env" ]; then
-        GITHUB_TOKEN=$(grep -oP 'GITHUB_TOKEN=\K.*' ./.env 2>/dev/null)
+        GITHUB_TOKEN=$(grep -oP 'GITHUB_TOKEN=\K.*' ./.env 2>/dev/null || true)
     fi
-    
     if [ -n "$GITHUB_TOKEN" ]; then
         git remote set-url origin "https://${GITHUB_TOKEN}@github.com/sang765/TMR-Discord-Bot.git"
     fi
-    
-    git fetch --all 2>&1 || echo "git fetch failed, continuing..."
-    git reset --hard origin/main 2>&1 || echo "git reset failed, using local"
+
+    git fetch --all || echo "git fetch failed, continuing..."
+    git reset --hard origin/main || echo "git reset failed, using local"
+
+    # Restore original remote URL (không để token nằm trong .git/config)
+    if [ -n "$GITHUB_TOKEN" ]; then
+        git remote set-url origin "$ORIG_URL"
+    fi
 
     # Restore config files after pull
     if [ -f "./config/config.yml.bak" ]; then
@@ -44,57 +56,44 @@ else
     fi
 fi
 
-if [ -f "./tmr-bot" ]; then
-    rm -f ./tmr-bot
+# ---------------------------------------------------------------
+# 2) Cài Go (nếu thiếu) rồi build
+#    Bot chỉ dùng Go stdlib + yaml — không cần ffmpeg hay gì khác
+# ---------------------------------------------------------------
+export GOROOT=/home/container/go
+export GOPATH=/home/container/gopath
+export GOMODCACHE=/home/container/gopath/pkg/mod
+export GOTOOLCHAIN=local
+export PATH=$GOROOT/bin:$GOPATH/bin:$PATH
+
+if [ ! -x "$GOROOT/bin/go" ]; then
+    echo "Installing Go..."
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        GO_URL="https://go.dev/dl/go1.23.6.linux-arm64.tar.gz"
+    else
+        GO_URL="https://go.dev/dl/go1.23.6.linux-amd64.tar.gz"
+    fi
+    wget -q "$GO_URL" -O /tmp/go.tar.gz && tar -C /home/container -xzf /tmp/go.tar.gz && rm -f /tmp/go.tar.gz
 fi
 
-if [ ! -f "./tmr-bot" ]; then
-    echo "Compiling..."
-
-    export GOROOT=/home/container/go
-    export GOPATH=/home/container/gopath
-    export GOMODCACHE=/home/container/gopath/pkg/mod
-    export PATH=$GOROOT/bin:$GOPATH/bin:$PATH
-
-    if [ ! -d "/home/container/go" ]; then
-        echo "Installing Go..."
-        ARCH=$(uname -m)
-        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-            GO_URL="https://go.dev/dl/go1.23.6.linux-arm64.tar.gz"
-        else
-            GO_URL="https://go.dev/dl/go1.23.6.linux-amd64.tar.gz"
-        fi
-        mkdir -p /home/container/go
-        wget -q "$GO_URL" -O /tmp/go.tar.gz
-        tar -C /home/container -xzf /tmp/go.tar.gz
-        rm /tmp/go.tar.gz
-    fi
-
-    # Install ffmpeg if not present (extract only binary, not models)
-    if ! command -v ffmpeg &> /dev/null && [ ! -f "/home/container/ffmpeg" ]; then
-        echo "Installing ffmpeg..."
-        ARCH=$(uname -m)
-        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz"
-        else
-            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
-        fi
-        wget -q "$FFMPEG_URL" -O /tmp/ffmpeg.tar.xz
-        tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffmpeg' --strip-components=1 -C /home/container/
-        tar -xf /tmp/ffmpeg.tar.xz --wildcards '*/ffprobe' --strip-components=1 -C /home/container/
-        chmod +x /home/container/ffmpeg /home/container/ffprobe
-        rm -f /tmp/ffmpeg.tar.xz
-    fi
-
-    export PATH=/home/container:$PATH
-    CGO_ENABLED=0 go build -o tmr-bot .
-    if [ $? -ne 0 ]; then
-        echo "Build failed!"
+echo "Compiling..."
+# Build ra file tạm: build fail thì giữ nguyên binary cũ, bot không bị chết giữa chừng
+if CGO_ENABLED=0 go build -o tmr-bot.new .; then
+    mv -f tmr-bot.new tmr-bot
+    echo "Build successful!"
+else
+    echo "Build failed!"
+    rm -f tmr-bot.new
+    if [ ! -f "./tmr-bot" ]; then
         exit 1
     fi
-    echo "Build successful!"
+    echo "Falling back to existing tmr-bot binary."
 fi
 
+# ---------------------------------------------------------------
+# 3) Kiểm tra .env rồi chạy
+# ---------------------------------------------------------------
 if [ ! -f "./.env" ]; then
     echo ".env file not found!"
     echo "Create .env with:"
@@ -103,4 +102,5 @@ if [ ! -f "./.env" ]; then
     exit 1
 fi
 
-./tmr-bot
+mkdir -p data
+exec ./tmr-bot
