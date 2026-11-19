@@ -2,7 +2,6 @@ package sources
 
 import (
 	"fmt"
-	"net/http"
 	"regexp"
 	"sort"
 	"strings"
@@ -55,24 +54,7 @@ func (c *CuuTruyen) getDirect(url string) (string, int, error) {
 }
 
 func (c *CuuTruyen) getJina(url string) (string, error) {
-	req, err := http.NewRequest("GET", "https://r.jina.ai/"+url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", ua)
-	req.Header.Set("X-Return-Format", "markdown")
-	body, code, err := doRequest(req)
-	if err != nil {
-		return "", err
-	}
-	if code != 200 {
-		return "", fmtErr("jina HTTP %d cho %s", code, url)
-	}
-	// strip jina header lines
-	if i := strings.Index(body, "Markdown Content:"); i >= 0 {
-		body = body[i+len("Markdown Content:"):]
-	}
-	return body, nil
+	return JinaGet(url, "markdown")
 }
 
 func (c *CuuTruyen) fetchPage() (string, bool, error) {

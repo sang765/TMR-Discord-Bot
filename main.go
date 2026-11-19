@@ -20,7 +20,7 @@ import (
 	"tmr-bot/store"
 )
 
-var version = "1.0.0"
+var version = "1.2.0"
 
 func main() {
 	cfgPath := flag.String("config", "config/config.yml", "đường dẫn file config")
@@ -120,10 +120,12 @@ func (a *app) run(once, forceSeed bool) error {
 	log.Printf("tmr-bot %s — %d nguồn, poll mỗi %d phút", version, len(a.fetchers), a.cfg.PollIntervalMin)
 
 	if seedMode {
-		if err := a.seed(); err != nil {
-			return err
+		if serr := a.seed(); serr != nil {
+			// đừng thoát bot — giữ sống, vòng lặp bên dưới sẽ tự seed lại
+			log.Printf("seed lần đầu chưa xong: %v — sẽ tự thử lại sau", serr)
 		}
 		if once {
+			_ = a.st.Save("data/state.json")
 			return nil
 		}
 	} else if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
@@ -162,6 +164,12 @@ func (a *app) run(once, forceSeed bool) error {
 			_ = a.st.Save("data/state.json")
 			return nil
 		case <-ticker.C:
+			if !a.st.Seeded() {
+				// seed lần trước lỗi (nguồn bị chặn...) -> thử lại, xong thì poll luôn
+				if serr := a.seed(); serr != nil {
+					continue
+				}
+			}
 			if err := a.poll(); err != nil {
 				log.Printf("poll: %v", err)
 			}
@@ -178,23 +186,30 @@ func (a *app) sourceList() string {
 }
 
 // seed marks current state without announcing.
+// Nếu nguồn nào lỗi (vd bị Cloudflare chặn) thì CHƯA coi là seed xong —
+// lần poll sau sẽ thử lại, tránh trường hợp seed thiếu mà vẫn chạy bình thường.
 func (a *app) seed() error {
-	log.Println("lần chạy đầu: nạp dữ liệu nền (không thông báo mục cũ)...")
+	log.Println("nạp dữ liệu nền (không thông báo mục cũ)...")
 	results := a.fetchAll(true)
 
-	total := 0
+	failed := 0
 	for _, r := range results {
 		if r.err != nil {
 			log.Printf("seed %s: %v", r.source, r.err)
-			continue
+			failed++
 		}
-		total += len(r.items)
 	}
+	if failed > 0 {
+		log.Printf("seed chưa hoàn tất (%d nguồn lỗi) — sẽ thử lại ở lần poll sau", failed)
+		_ = a.st.Save("data/state.json")
+		return fmt.Errorf("%d nguồn seed lỗi", failed)
+	}
+
 	a.st.SetSeeded()
 	if err := a.st.Save("data/state.json"); err != nil {
 		return err
 	}
-	log.Printf("đã nạp %d mục vào nền", a.st.CountSeen())
+	log.Printf("seed xong: %d mục đã biết, bot bắt đầu theo dõi từ bây giờ", a.st.CountSeen())
 
 	if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
 		msg := fmt.Sprintf("📦 **TMR Bot** (v%s) đã nạp dữ liệu nền lần đầu (%d mục đã biết). Từ giờ chỉ thông báo mục mới thôi!", version, a.st.CountSeen())

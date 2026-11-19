@@ -65,6 +65,18 @@ go build -o tmr-bot . && ./tmr-bot            # chạy thường
 - `cuutruyen_jina: true` — luôn lấy Cứu Truyện qua r.jinai.ai (khi direct bị Cloudflare chặn).
 - `enable_*` — bật/tắt từng nguồn.
 
+## Nếu bị Cloudflare chặn (403)
+
+Hosting dùng IP datacenter hay bị Cloudflare của các trang chặn (403). Bot xử lý theo lớp:
+
+1. Header giả browser chuẩn (UA Chrome + Accept-Language vi).
+2. Vẫn 403 → tự lấy qua **r.jina.ai** (đã verify với DocLn; Cứu Truyện luôn đi đường này).
+3. Mòe Truyện có thể vẫn lỗi nếu CF chặn cả jina — bot vẫn chạy với các nguồn còn lại
+   (nội dung Mòe trùng Cứu Truyện nên không mất thông báo), lỗi sẽ được báo vào `#novel-status`.
+
+Lần chạy đầu nếu nguồn nào lỗi, bot **chưa coi là seed xong** — tự thử lại ở lần poll sau
+cho tới khi đủ nguồn, rồi mới bắt đầu thông báo.
+
 State (danh sách mục đã thấy) lưu ở `data/state.json` — xoá file này = bot quét lại từ đầu
 (seed, không spam).
 

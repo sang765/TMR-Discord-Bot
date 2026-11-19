@@ -60,15 +60,24 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 		return nil, err
 	}
 	body, code, err := doRequest(req)
-	if err != nil {
-		return nil, err
+
+	parsed := []moeItem{}
+	if err == nil && code == 200 {
+		parsed = m.parse(body)
 	}
-	if code != 200 {
-		return nil, fmtErr("HTTP %d cho %s", code, url)
-	}
-	parsed := m.parse(body)
+
+	// direct bị chặn / không có dữ liệu -> thử qua r.jina.ai
 	if len(parsed) == 0 {
-		return nil, fmtErr("không tìm thấy mục cập nhật nào trên trang nhóm")
+		if jb, jerr := JinaGet(url, "html"); jerr == nil {
+			parsed = m.parse(jb)
+		} else if err != nil {
+			return nil, fmtErr("direct: %v; jina: %v", err, jerr)
+		} else {
+			return nil, fmtErr("HTTP %d; jina: %v", code, jerr)
+		}
+	}
+	if len(parsed) == 0 {
+		return nil, fmtErr("không tìm thấy mục cập nhật nào trên trang nhóm (kể cả qua jina)")
 	}
 
 	now := time.Now()

@@ -165,12 +165,12 @@ func (s *Store) AnnouncedWithin(key string, window time.Duration) bool {
 	return ok && time.Since(t) < window
 }
 
-// CanPostError rate-limits error notices per source (1/hour).
+// CanPostError rate-limits error notices per source (1 / 6 giờ).
 func (s *Store) CanPostError(source string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.st.LastErr[source]
-	if ok && time.Since(t) < time.Hour {
+	if ok && time.Since(t) < 6*time.Hour {
 		return false
 	}
 	s.st.LastErr[source] = time.Now()

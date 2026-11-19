@@ -3,7 +3,6 @@ package sources
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"regexp"
 	"sort"
 	"strings"
@@ -44,6 +43,19 @@ var (
 )
 
 func (d *DocLn) get(url string) (string, error) {
+	body, err := d.getDirect(url)
+	if err == nil {
+		return body, nil
+	}
+	// direct bị chặn (Cloudflare 403 trên hosting, 429, lỗi mạng...)
+	// -> thử qua r.jina.ai trả HTML, parser cũ dùng lại được
+	if jb, jerr := JinaGet(url, "html"); jerr == nil && strings.Contains(jb, "series-name") {
+		return jb, nil
+	}
+	return "", err
+}
+
+func (d *DocLn) getDirect(url string) (string, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		doclnMu.Lock()
 		if wait := doclnGap - time.Since(doclnLast); wait > 0 {
@@ -52,11 +64,10 @@ func (d *DocLn) get(url string) (string, error) {
 		doclnLast = time.Now()
 		doclnMu.Unlock()
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := newRequest("GET", url)
 		if err != nil {
 			return "", err
 		}
-		req.Header.Set("User-Agent", ua)
 		resp, err := HTTP.Do(req)
 		if err != nil {
 			return "", err
