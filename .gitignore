@@ -17,6 +17,8 @@ vendor/
 
 # Environment
 .env
+data/
+
 
 # IDE
 .vscode/

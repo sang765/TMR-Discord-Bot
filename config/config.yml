@@ -1,0 +1,44 @@
+# TMR Discord Bot — cấu hình
+# Token nên để trong .env (DISCORD_TOKEN=...) — không commit token vào file này!
+
+discord_token: ""            # hoặc dùng .env
+guild_id: "1447576235550052455"
+role_id: "1424440045116330204" # @PING TRUYỆN MỚI VÀ CHAP MỚI
+
+channels:
+  status: "1447576235550052455"      # 🐱 novel-status — bot báo lỗi/trạng thái ở đây
+  novel_chap: "1419645898601922631"  # 📖 chap-novel-mới
+  novel_new: "1423279053221138462"   # 📚 new-novel
+  manga_chap: "1490326845193719879"  # 💭 chap-manga-mới
+  manga_new: "1490326204874494113"   # 📰 new-manga
+
+# Lịch poll (phút)
+poll_interval_min: 15
+
+# Chỉ thông báo mục đăng trong vòng N giờ gần nhất (tránh spam mục cũ)
+max_age_hours: 72
+# Trùng (cùng truyện + cùng số chap từ nguồn khác) trong N giờ thì bỏ qua
+dedup_hours: 6
+
+# Nguồn
+enable_docln: true
+enable_mangadex: true
+enable_moe: true
+enable_cuutruyen: true
+
+# Chi tiết nguồn (thường không cần sửa)
+docln_base: "https://docln.sbs"    # đổi thành docln.net / ln.hako.vn nếu cần
+docln_group_id: "3474"
+docln_pages: 2
+mangadex_limit: 50
+moe_base: "https://truyen.moe"
+moe_team_path: "/team/256/the-mavericks"
+cuutruyen_base: "https://cuutruyen.net"  # đổi thành mirror nếu bị chặn
+cuutruyen_team_id: "+695"
+cuutruyen_jina: false              # true = luôn lấy qua r.jina.ai
+
+# Bot báo online/lỗi vào kênh status
+status_notices: true
+
+# true = chỉ in thông báo ra log, không gửi Discord
+debug: false
