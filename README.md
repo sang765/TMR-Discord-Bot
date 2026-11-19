@@ -20,7 +20,7 @@ Mỗi 15 phút (tuỳ chỉnh) bot quét:
 
 - **Ping role** `@PING TRUYỆN MỚI VÀ CHAP MỚI` trong mỗi thông báo.
 - **Không spam mục cũ**: lần chạy đầu bot chỉ "học" dữ liệu nền, từ lần sau mới báo mục mới (mới hơn 72h).
-- **Gộp link nhiều nền tảng**: cùng một truyện + cùng sốchap từ nguồn khác lên sau → bot **edit tin nhắn cũ**,
+- **Gộp link nhiều nền tảng**: cùng một truyện + cùng số chap từ nguồn khác lên sau → bot **edit tin nhắn cũ**,
   thêm dòng "🔗 Cũng có tại: [MangaDex](...) • [Cứu Truyện](...)" (giống style team tự viết
   "cuu - mgd - moe - fb"). Bot so khớp theo tên truyện đã chuẩn hoá — MD thường có tên VI trong
   alt titles nên khớp được; nếu MD đặt tên khác hẳn (không có alt title VI) thì sẽ thành tin riêng.
