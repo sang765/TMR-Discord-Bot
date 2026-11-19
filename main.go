@@ -20,7 +20,7 @@ import (
 	"tmr-bot/store"
 )
 
-var version = "1.2.1"
+var version = "1.2.2"
 
 func main() {
 	cfgPath := flag.String("config", "config/config.yml", "đường dẫn file config")
@@ -186,23 +186,36 @@ func (a *app) sourceList() string {
 }
 
 // seed marks current state without announcing.
-// Nếu nguồn nào lỗi (vd bị Cloudflare chặn) thì CHƯA coi là seed xong —
-// lần poll sau sẽ thử lại, tránh trường hợp seed thiếu mà vẫn chạy bình thường.
+// Nguồn nào lỗi thì thử lại ở các lần poll sau; nhưng nếu một nguồn lỗi >= 3 lần
+// liên tiếp (vd bị Cloudflare chặn vĩnh viễn từ IP hosting) thì chấp nhận chạy
+// thiếu nguồn đó — tránh kẹt trong vòng seed vĩnh viễn, không bao giờ thông báo.
+const seedMaxFail = 3
+
 func (a *app) seed() error {
 	log.Println("nạp dữ liệu nền (không thông báo mục cũ)...")
 	results := a.fetchAll(true)
 
-	failed := 0
+	pending := 0
+	var skipped []string
 	for _, r := range results {
-		if r.err != nil {
-			log.Printf("seed %s: %v", r.source, r.err)
-			failed++
+		if r.err == nil {
+			a.st.ResetSeedFail(r.source)
+			continue
+		}
+		n := a.st.IncSeedFail(r.source)
+		if n < seedMaxFail {
+			log.Printf("seed %s: %v (lần %d/%d)", r.source, r.err, n, seedMaxFail)
+			pending++
+		} else {
+			log.Printf("seed %s: %v — đã lỗi %d lần, tạm bỏ qua nguồn này", r.source, r.err, n)
+			skipped = append(skipped, r.source)
 		}
 	}
-	if failed > 0 {
-		log.Printf("seed chưa hoàn tất (%d nguồn lỗi) — sẽ thử lại ở lần poll sau", failed)
-		_ = a.st.Save("data/state.json")
-		return fmt.Errorf("%d nguồn seed lỗi", failed)
+	_ = a.st.Save("data/state.json")
+
+	if pending > 0 {
+		log.Printf("seed chưa hoàn tất — sẽ thử lại ở lần poll sau")
+		return fmt.Errorf("%d nguồn seed chưa xong", pending)
 	}
 
 	a.st.SetSeeded()
@@ -213,6 +226,9 @@ func (a *app) seed() error {
 
 	if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
 		msg := fmt.Sprintf("📦 **TMR Bot** (v%s) đã nạp dữ liệu nền lần đầu (%d mục đã biết). Từ giờ chỉ thông báo mục mới thôi!", version, a.st.CountSeen())
+		if len(skipped) > 0 {
+			msg += fmt.Sprintf("\n⚠️ Không seed được nguồn: **%s** (bị chặn) — bot vẫn chạy với các nguồn còn lại.", strings.Join(skipped, ", "))
+		}
 		if _, err := a.dc.SendMessage(a.cfg.Channels.Status, discord.Message{Content: msg}); err != nil {
 			log.Printf("không gửi được thông báo seed: %v", err)
 		}
@@ -237,6 +253,7 @@ func (a *app) fetchAll(seed bool) []pollResult {
 
 func (a *app) poll() error {
 	start := time.Now()
+	defer a.recoverSkippedSeeds()
 	results := a.fetchAll(false)
 
 	var all []sources.Item
@@ -273,6 +290,29 @@ func (a *app) poll() error {
 	}
 	log.Printf("poll xong trong %s — gửi %d thông báo", time.Since(start).Round(time.Second), sent)
 	return nil
+}
+
+// recoverSkippedSeeds: nguồn nào khi seed từng bị bỏ qua (lỗi >= 3 lần) thì
+// ở các poll sau vẫn phải "học nền" trước khi được phép thông báo — nếu không wiping
+// state để nó tự seed sẽ flood toàn bộ chapter cũ ngay khi CF thả.
+func (a *app) recoverSkippedSeeds() {
+	for _, f := range a.fetchers {
+		if a.st.SeedFailCount(f.Name()) == 0 {
+			continue
+		}
+		_, err := f.Fetch(true) // seed-mode: chỉ đánh dấu, không phát item
+		if err != nil {
+			log.Printf("seed lại %s vẫn lỗi: %v", f.Name(), err)
+			continue
+		}
+		a.st.ResetSeedFail(f.Name())
+		_ = a.st.Save("data/state.json")
+		log.Printf("nguồn %s đã hồi phục — đã nạp nền, bắt đầu thông báo từ giờ", f.Name())
+		if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
+			msg := fmt.Sprintf("✅ Nguồn **%s** đã truy cập lại được — đã nạp dữ liệu nền, bắt đầu thông báo mục mới.", f.Name())
+			_, _ = a.dc.SendMessage(a.cfg.Channels.Status, discord.Message{Content: msg})
+		}
+	}
 }
 
 func (a *app) maybeReportError(source string, err error) {

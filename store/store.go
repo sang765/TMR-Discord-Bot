@@ -31,6 +31,7 @@ type state struct {
 	Posted    map[string]PostedEntry  `json:"posted"`
 	LastErr   map[string]time.Time    `json:"last_error_post"`
 	LastPoll  map[string]time.Time    `json:"last_poll"`
+	SeedFails map[string]int          `json:"seed_fails"`
 	Seeded    bool                    `json:"seeded"`
 }
 
@@ -42,6 +43,7 @@ func Open(path string) (*Store, error) {
 		Posted:    map[string]PostedEntry{},
 		LastErr:   map[string]time.Time{},
 		LastPoll:  map[string]time.Time{},
+		SeedFails: map[string]int{},
 	}}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -58,6 +60,7 @@ func Open(path string) (*Store, error) {
 			Posted:    map[string]PostedEntry{},
 			LastErr:   map[string]time.Time{},
 			LastPoll:  map[string]time.Time{},
+			SeedFails: map[string]int{},
 		}}, nil
 	}
 	if s.st.Seen == nil {
@@ -74,6 +77,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.st.Posted == nil {
 		s.st.Posted = map[string]PostedEntry{}
+	}
+	if s.st.SeedFails == nil {
+		s.st.SeedFails = map[string]int{}
 	}
 	return s, nil
 }
@@ -175,6 +181,28 @@ func (s *Store) CanPostError(source string) bool {
 	}
 	s.st.LastErr[source] = time.Now()
 	return true
+}
+
+// IncSeedFail bumps the failed-seed counter of a source, returns the new value.
+func (s *Store) IncSeedFail(source string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.SeedFails[source]++
+	return s.st.SeedFails[source]
+}
+
+// ResetSeedFail clears the failed-seed counter of a source.
+func (s *Store) ResetSeedFail(source string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.st.SeedFails, source)
+}
+
+// SeedFailCount returns the counter of a source.
+func (s *Store) SeedFailCount(source string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.st.SeedFails[source]
 }
 
 // SetSeeded marks the baseline as done.
