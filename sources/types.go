@@ -94,3 +94,19 @@ func NewTransport(proxyRaw string) (*http.Transport, error) {
 	}
 	return tr, nil
 }
+
+// NewDirectTransport tao transport di thang, ép IPv4 để né DNS bị chặn về
+// ::1/127.0.0.1 (một số mạng VN poison DNS các trang truyện).
+func NewDirectTransport() *http.Transport {
+	d := &net.Dialer{Timeout: 20 * time.Second}
+	return &http.Transport{
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          20,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   20 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return d.DialContext(ctx, "tcp4", addr)
+		},
+	}
+}

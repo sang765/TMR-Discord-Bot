@@ -55,6 +55,8 @@ func main() {
 		}
 		sources.HTTP.Transport = tr
 		log.Printf("scrape qua proxy: %s", cfg.Proxy)
+	} else {
+		sources.HTTP.Transport = sources.NewDirectTransport()
 	}
 	dc := discord.New(cfg.DiscordToken)
 
