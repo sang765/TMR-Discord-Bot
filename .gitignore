@@ -31,6 +31,7 @@ Thumbs.db
 #build file
 *.exe
 tmr-bot
+tmr-bot-armv7
 
 # Oh My OpenAgent (??? bro)
 .omo/
