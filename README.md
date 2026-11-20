@@ -126,6 +126,32 @@ nếu `wireproxy.log` không thấy "Interface state ... Up" thì host không ch
 State (danh sách mục đã thấy) lưu ở `data/state.json` — xoá file này = bot quét lại từ đầu
 (seed, không spam).
 
+## Chạy trên Termux (Android)
+
+Binary cho Termux là `tmr-bot-armv7` (linux/arm, CGO_ENABLED=0):
+
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o tmr-bot-armv7 .
+
+Android không có `/etc/resolv.conf` và store CA kiểu Linux, nên bot tự fallback:
+DNS hỏi thẳng 1.1.1.1/8.8.8.8, TLS ưu tiên bundle của Termux rồi tới store
+`/system`. Cài một lần cho TLS chắc ăn (store `/system` trên máy cũ thường thiếu
+root hiện đại):
+
+    pkg install ca-certificates
+
+Bot tự tìm `$PREFIX/etc/tls/cert.pem`, không cần set biến môi trường gì thêm.
+
+## Thông báo Components V2 (từ v1.4.0)
+
+Thông báo chap/truyện mới là card **Components V2** (container viền màu theo nguồn):
+role ping + tên truyện + chương, ảnh bìa (Media Gallery), nút link "Đọc tại ...",
+chân card có thời gian. Khi merge đa nguồn, bot PATCH tin gốc và chèn dòng
+"🔗 Cũng có tại: ..." vào card (giữ nguyên cờ `IS_COMPONENTS_V2`).
+
+- Tin V2 không được chứa `content`/`embeds` — toàn bộ nội dung nằm trong `components`.
+- Tin nhắn cũ kiểu embed (trước v1.4) vẫn được merge theo kiểu cũ khi PATCH lại.
+- Tool kiểm tra payload với API thật (gửi rồi tự xoá): `go run ./cmd/v2test`.
+
 ## Cập nhật
 
 `run.sh` tự `git fetch` + build lại mỗi lần khởi động, giữ nguyên `.env` và `config/config.yml`.

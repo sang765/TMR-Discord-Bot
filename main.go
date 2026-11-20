@@ -20,7 +20,7 @@ import (
 	"tmr-bot/store"
 )
 
-var version = "1.2.2"
+var version = "1.4.0"
 
 func main() {
 	cfgPath := flag.String("config", "config/config.yml", "đường dẫn file config")
@@ -430,21 +430,18 @@ func (a *app) mergeInto(entry store.PostedEntry, dedupKey, srcName, url, title, 
 	}
 
 	// dòng link: "🔗 Cũng có tại: [MangaDex](...) • [Mòe Truyện](...)"
-	parts := make([]string, 0, len(entry.Links))
-	for name, link := range entry.Links {
-		parts = append(parts, fmt.Sprintf("[%s](%s)", name, link))
-	}
-	sort.Strings(parts)
-	linksLine := "🔗 **Cũng có tại:** " + strings.Join(parts, " • ")
+	linksLine := linksLineFrom(entry.Links)
 
-	if len(base.Embeds) > 0 {
+	switch {
+	case len(base.Components) > 0: // Components V2
+		mergeIntoComponents(&base, entry.Links)
+	case len(base.Embeds) > 0: // embed cũ (tin nhắn trước v1.3)
 		desc := strings.TrimSpace(base.Embeds[0].Description)
-		// gỡ dòng linksLine cũ (nếu có) rồi thêm dòng mới
 		if i := strings.Index(desc, "🔗 **Cũng có tại:**"); i >= 0 {
 			desc = strings.TrimSpace(desc[:i])
 		}
 		base.Embeds[0].Description = joinNonEmpty("\n\n", desc, linksLine)
-	} else {
+	default:
 		base.Content = strings.TrimSpace(base.Content) + "\n\n" + linksLine
 	}
 
@@ -477,56 +474,107 @@ var sourceColors = map[string]int{
 	"cuutruyen": 0x2ECC71,
 }
 
+// buildMessage renders a Components V2 message (embed V2):
+//
+//	┌─ Container (viền màu theo nguồn) ────────────┐
+//	│ @role                                        │
+//	│ # Tên truyện                                 │
+//	│ Đã upload **Chương 2 — ...**                 │
+//	│ [ảnh bìa lớn]                                │
+//	│ [Đọc tại Mòe Truyện]  (nút link)             │
+//	│ -# The Mavericks • Mòe Truyện • 20/11 11:38  │
+//	└──────────────────────────────────────────────┘
 func buildMessage(roleID string, it sources.Item) discord.Message {
 	src := sourceNames[it.Source]
 	color := sourceColors[it.Source]
 	role := discord.MentionRole(roleID)
-	ts := ""
-	if !it.Published.IsZero() {
-		ts = it.Published.UTC().Format(time.RFC3339)
-	}
 
+	var head string
 	if it.Kind == sources.KindNewSeries {
-		content := fmt.Sprintf("📚 %s — **Truyện mới:** %s!", role, it.Title)
-		if role == "" {
-			content = fmt.Sprintf("📚 **Truyện mới:** %s!", it.Title)
-		}
-		emb := discord.Embed{
-			Title:       "Đọc " + it.Title + " tại " + src,
-			URL:         it.URL,
-			Description: it.Subtitle,
-			Color:       color,
-			Timestamp:   ts,
-			Image:       thumbOrNil(it.CoverURL),
-			Footer:      &discord.EmbedFooter{Text: "The Mavericks • " + src},
-		}
-		if it.Chapter != "" {
-			emb.Description = joinNonEmpty("\n", it.Chapter, it.Subtitle)
-		}
-		return discord.Message{Content: content, Embeds: []discord.Embed{emb}}
+		head = "📚 **Truyện mới!**"
+	} else {
+		head = "Đã upload **" + it.Chapter + "**"
 	}
+	text := joinNonEmpty("\n", role, "# "+it.Title, head, Truncate(it.Subtitle, 200))
 
-	content := fmt.Sprintf("📖 %s — **%s** vừa ra %s!", role, it.Title, it.Chapter)
-	if role == "" {
-		content = fmt.Sprintf("📖 **%s** vừa ra %s!", it.Title, it.Chapter)
+	inner := []discord.Component{
+		{Type: discord.CompTextDisplay, Content: text},
 	}
-	emb := discord.Embed{
-		Title:       fmt.Sprintf("Đọc %s tại %s", it.Chapter, src),
-		URL:         it.URL,
-		Description: it.Subtitle,
-		Color:       color,
-		Timestamp:   ts,
-		Thumbnail:   thumbOrNil(it.CoverURL),
-		Footer:      &discord.EmbedFooter{Text: "The Mavericks • " + src},
+	if it.CoverURL != "" {
+		inner = append(inner, discord.Component{
+			Type:  discord.CompMediaGallery,
+			Items: []discord.MediaItem{{Media: discord.MediaSource{URL: it.CoverURL}}},
+		})
 	}
-	return discord.Message{Content: content, Embeds: []discord.Embed{emb}}
+	inner = append(inner,
+		discord.Component{
+			Type: discord.CompActionRow,
+			Components: []discord.Component{{
+				Type:  discord.CompButton,
+				Style: discord.ButtonStyleLink,
+				Label: Truncate("Đọc tại "+src, 80),
+				URL:   it.URL,
+			}},
+		},
+		discord.Component{Type: discord.CompTextDisplay, Content: footerLine(src, it)},
+	)
+	return discord.Message{
+		Flags:      discord.FlagComponentsV2,
+		Components: []discord.Component{{Type: discord.CompContainer, AccentColor: color, Components: inner}},
+	}
 }
 
-func thumbOrNil(url string) *discord.EmbedThumb {
-	if url == "" {
-		return nil
+func footerLine(src string, it sources.Item) string {
+	line := "-# The Mavericks • " + src
+	if !it.Published.IsZero() {
+		line += " • " + it.Published.In(tzVN).Format("02/01 15:04")
 	}
-	return &discord.EmbedThumb{URL: url}
+	return line
+}
+
+var tzVN = time.FixedZone("+07:00", 7*3600)
+
+// linksLineFrom dựng dòng "🔗 Cũng có tại: [Nguồn](url) • ..." (sorted cho ổn định).
+func linksLineFrom(links map[string]string) string {
+	parts := make([]string, 0, len(links))
+	for name, link := range links {
+		parts = append(parts, fmt.Sprintf("[%s](%s)", name, link))
+	}
+	sort.Strings(parts)
+	return "🔗 **Cũng có tại:** " + strings.Join(parts, " • ")
+}
+
+// mergeIntoComponents chèn/cập nhật dòng link trong message Components V2.
+func mergeIntoComponents(base *discord.Message, links map[string]string) {
+	line := linksLineFrom(links)
+	for ci := range base.Components {
+		c := &base.Components[ci]
+		if c.Type != discord.CompContainer {
+			continue
+		}
+		linksIdx, rowIdx := -1, -1
+		for i := range c.Components {
+			switch c.Components[i].Type {
+			case discord.CompTextDisplay:
+				if strings.HasPrefix(c.Components[i].Content, "🔗") {
+					linksIdx = i
+				}
+			case discord.CompActionRow:
+				rowIdx = i
+			}
+		}
+		if linksIdx < 0 {
+			ins := len(c.Components)
+			if rowIdx >= 0 {
+				ins = rowIdx
+			}
+			c.Components = append(c.Components, discord.Component{})
+			copy(c.Components[ins+1:], c.Components[ins:])
+			c.Components[ins] = discord.Component{Type: discord.CompTextDisplay, Content: line}
+			linksIdx = ins
+		}
+		c.Components[linksIdx].Content = line
+	}
 }
 
 func joinNonEmpty(sep string, parts ...string) string {
@@ -540,11 +588,29 @@ func joinNonEmpty(sep string, parts ...string) string {
 }
 
 func embedSummary(m discord.Message) string {
-	if len(m.Embeds) == 0 {
-		return "(none)"
+	if len(m.Embeds) > 0 {
+		return fmt.Sprintf("%s -> %s", m.Embeds[0].Title, m.Embeds[0].URL)
 	}
-	e := m.Embeds[0]
-	return fmt.Sprintf("%s -> %s", e.Title, e.URL)
+	for _, c := range m.Components {
+		if c.Type != discord.CompContainer {
+			continue
+		}
+		var first, btn string
+		for _, sub := range c.Components {
+			switch sub.Type {
+			case discord.CompTextDisplay:
+				if first == "" && !strings.HasPrefix(sub.Content, "🔗") && !strings.HasPrefix(sub.Content, "-#") {
+					first = strings.SplitN(sub.Content, "\n", 2)[0]
+				}
+			case discord.CompActionRow:
+				if len(sub.Components) > 0 {
+					btn = sub.Components[0].Label + " -> " + sub.Components[0].URL
+				}
+			}
+		}
+		return strings.TrimSpace(first) + " | " + btn
+	}
+	return "(trống)"
 }
 
 // loadDotEnv reads simple KEY=VALUE lines into env (not overriding existing).
@@ -568,4 +634,13 @@ func loadDotEnv(path string) {
 			os.Setenv(k, v)
 		}
 	}
+}
+
+// Truncate rut gon chuoi toi max ki tu.
+func Truncate(s string, max int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= max {
+		return string(r)
+	}
+	return string(r[:max-1]) + "…"
 }

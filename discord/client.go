@@ -45,8 +45,55 @@ type Embed struct {
 
 // Message is the outgoing payload.
 type Message struct {
-	Content string  `json:"content,omitempty"`
-	Embeds  []Embed `json:"embeds,omitempty"`
+	Content    string      `json:"content,omitempty"`
+	Embeds     []Embed     `json:"embeds,omitempty"`
+	Flags      int         `json:"flags,omitempty"`
+	Components []Component `json:"components,omitempty"`
+}
+
+// FlagComponentsV2 bật chế độ Components V2 (text display / container / button).
+const FlagComponentsV2 = 1 << 15
+
+// Các loại component (Components V2).
+const (
+	CompActionRow    = 1
+	CompButton       = 2
+	CompSection      = 9
+	CompTextDisplay  = 10
+	CompThumbnail    = 11
+	CompMediaGallery = 12
+	CompSeparator    = 14
+	CompContainer    = 17
+)
+
+// ButtonStyleLink là style nút điều hướng URL.
+const ButtonStyleLink = 5
+
+// Component mô tả chung mọi loại component của Components V2
+// (các field không dùng sẽ bị omitempty bỏ khỏi JSON).
+type Component struct {
+	Type        int          `json:"type"`
+	Content     string       `json:"content,omitempty"`      // TextDisplay
+	Style       int          `json:"style,omitempty"`        // Button
+	Label       string       `json:"label,omitempty"`        // Button
+	URL         string       `json:"url,omitempty"`          // Button link
+	Disabled    bool         `json:"disabled,omitempty"`     // Button
+	Items       []MediaItem  `json:"items,omitempty"`        // MediaGallery
+	Media       *MediaSource `json:"media,omitempty"`        // Thumbnail
+	Accessory   *Component   `json:"accessory,omitempty"`    // Section
+	Components  []Component  `json:"components,omitempty"`   // ActionRow/Section/Container
+	AccentColor int          `json:"accent_color,omitempty"` // Container
+	Spoiler     bool         `json:"spoiler,omitempty"`      // Container/Thumbnail
+}
+
+// MediaItem là một ảnh trong MediaGallery.
+type MediaItem struct {
+	Media MediaSource `json:"media"`
+}
+
+// MediaSource là tham chiếu URL media.
+type MediaSource struct {
+	URL string `json:"url"`
 }
 
 // SendMessage posts to a channel, returns the message ID.
@@ -137,6 +184,25 @@ func (c *Client) PatchMessage(channelID, messageID string, msg Message) error {
 		}
 	}
 	return fmt.Errorf("discord rate limited sau 3 lần thử (PATCH)")
+}
+
+// DeleteMessage xoá một tin nhắn của bot.
+func (c *Client) DeleteMessage(channelID, messageID string) error {
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages/%s", channelID, messageID), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bot "+c.Token)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
+		return fmt.Errorf("discord DELETE HTTP %d: %s", resp.StatusCode, body)
+	}
+	return nil
 }
 
 // MentionRole renders a role mention.
