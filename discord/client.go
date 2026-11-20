@@ -33,13 +33,13 @@ type EmbedFooter struct {
 
 // Embed is a rich message embed.
 type Embed struct {
-	Title       string      `json:"title,omitempty"`
-	URL         string      `json:"url,omitempty"`
-	Description string      `json:"description,omitempty"`
-	Color       int         `json:"color,omitempty"`
-	Timestamp   string      `json:"timestamp,omitempty"`
-	Thumbnail   *EmbedThumb `json:"thumbnail,omitempty"`
-	Image       *EmbedThumb `json:"image,omitempty"`
+	Title       string       `json:"title,omitempty"`
+	URL         string       `json:"url,omitempty"`
+	Description string       `json:"description,omitempty"`
+	Color       int          `json:"color,omitempty"`
+	Timestamp   string       `json:"timestamp,omitempty"`
+	Thumbnail   *EmbedThumb  `json:"thumbnail,omitempty"`
+	Image       *EmbedThumb  `json:"image,omitempty"`
 	Footer      *EmbedFooter `json:"footer,omitempty"`
 }
 

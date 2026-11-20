@@ -42,5 +42,9 @@ cuutruyen_jina: false              # true = luôn lấy qua r.jina.ai
 # Bot báo online/lỗi vào kênh status
 status_notices: true
 
+# Proxy cho scrape (để trống = đi thẳng). WARP/wireproxy trên host:
+# proxy: "socks5://127.0.0.1:40000"
+proxy: ""
+
 # true = chỉ in thông báo ra log, không gửi Discord
 debug: false

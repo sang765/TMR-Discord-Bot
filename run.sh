@@ -92,7 +92,29 @@ else
 fi
 
 # ---------------------------------------------------------------
-# 3) Kiểm tra .env rồi chạy
+# 3) (Tuỳ chọn) WARP proxy: nếu có wireproxy.conf thì mở SOCKS5 local
+# ---------------------------------------------------------------
+if [ -f "./wireproxy.conf" ]; then
+    if [ ! -x "/home/container/wireproxy" ]; then
+        echo "Installing wireproxy..."
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            aarch64|arm64) WP_URL="https://github.com/pufferffish/wireproxy/releases/latest/download/wireproxy_linux_arm64.tar.gz" ;;
+            *) WP_URL="https://github.com/pufferffish/wireproxy/releases/latest/download/wireproxy_linux_amd64.tar.gz" ;;
+        esac
+        wget -q "$WP_URL" -O /tmp/wp.tar.gz \
+            && tar -xzf /tmp/wp.tar.gz -C /home/container wireproxy \
+            && chmod +x /home/container/wireproxy
+        rm -f /tmp/wp.tar.gz
+    fi
+    if [ -x "/home/container/wireproxy" ]; then
+        echo "Starting wireproxy (WARP SOCKS5 on 127.0.0.1:40000)..."
+        nohup /home/container/wireproxy -c /home/container/wireproxy.conf > /home/container/wireproxy.log 2>&1 &
+    fi
+fi
+
+# ---------------------------------------------------------------
+# 4) Kiểm tra .env rồi chạy
 # ---------------------------------------------------------------
 if [ ! -f "./.env" ]; then
     echo ".env file not found!"

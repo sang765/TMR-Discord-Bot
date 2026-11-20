@@ -69,13 +69,59 @@ go build -o tmr-bot . && ./tmr-bot            # chạy thường
 
 Hosting dùng IP datacenter hay bị Cloudflare của các trang chặn (403). Bot xử lý theo lớp:
 
-1. Header giả browser chuẩn (UA Chrome + Accept-Language vi).
-2. Vẫn 403 → tự lấy qua **r.jina.ai** (đã verify với DocLn; Cứu Truyện luôn đi đường này).
-3. Mòe Truyện có thể vẫn lỗi nếu CF chặn cả jina — bot vẫn chạy với các nguồn còn lại
-   (nội dung Mòe trùng Cứu Truyện nên không mất thông báo), lỗi sẽ được báo vào `#novel-status`.
+1. Header giả browser chuẩn (UA Chrome + Accept-Language vi) cho trang HTML, header API thẳng
+   cho API (MangaDex **chống** request giả browser).
+2. Vẫn 403 → tự lấy qua **r.jina.ai** (throttle 3.5s, retry khi gặp challenge).
+3. **WARP proxy (khuyến nghị)** — xem mục dưới, giải quyết triệt để: IP đi ra là IP Cloudflare,
+   đã verify 200 sạch với cả 4 nguồn (kể cả Mòe Truyện).
+4. Nguồn nào vẫn chết: sau 3 lần seed lỗi bot chấp nhận chạy thiếu nó, và tự "hồi phục" ngầm
+   khi nguồn mở lại (nạp nền trước, không spam chap cũ). Lỗi được báo vào `#novel-status`
+   (tối đa 1 lần/6 giờ).
 
 Lần chạy đầu nếu nguồn nào lỗi, bot **chưa coi là seed xong** — tự thử lại ở lần poll sau
-cho tới khi đủ nguồn, rồi mới bắt đầu thông báo.
+cho tới khi đủ nguồn (hoặc bỏ cuộc sau 3 lần với nguồn đã chết hẳn).
+
+## Chạy qua WARP (wireproxy)
+
+Tại sao: WARP của Cloudflare cho ra IP Cloudflare, các trang dùng CF thường thông cảm với
+IP "nhà mình". Không cần TUN/root nhờ `wireproxy` (userspace WireGuard → SOCKS5 local).
+
+1. Sinh profile WARP (một lần, chạy ở đâu cũng được):
+
+   ```bash
+   wgcf register --accept-tos && wgcf generate   # -> wgcf-profile.conf
+   ```
+
+2. Tạo `wireproxy.conf` cạnh `run.sh` (lấy PrivateKey/Address từ wgcf-profile.conf,
+   chỉ giữ IPv4, giữ nguyên PublicKey/Endpoint của Peer):
+
+   ```ini
+   [Interface]
+   PrivateKey = <PRIVATE_KEY_CỦA_BẠN>
+   Address = 172.16.0.2/32
+   DNS = 1.1.1.1
+
+   [Peer]
+   PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+   Endpoint = engage.cloudflareclient.com:2408
+   AllowedIPs = 0.0.0.0/0
+
+   [Socks5]
+   BindAddress = 127.0.0.1:40000
+   ```
+
+3. `run.sh` thấy `wireproxy.conf` là tự tải wireproxy + chạy nền SOCKS5 tại
+   `127.0.0.1:40000`.
+4. Bật trong `config/config.yml`:
+
+   ```yaml
+   proxy: "socks5://127.0.0.1:40000"
+   ```
+
+Lưu ý: WARP đi UDP ra ngoài (mặc định port 2408) — vài host Pterodactyl chặn UDP;
+nếu `wireproxy.log` không thấy "Interface state ... Up" thì host không cho, xoá
+`proxy:` khỏi config là bot về chế độ direct + jina như cũ. `PrivateKey` là bí mật —
+đừng commit, đừng gửi ai.
 
 State (danh sách mục đã thấy) lưu ở `data/state.json` — xoá file này = bot quét lại từ đầu
 (seed, không spam).

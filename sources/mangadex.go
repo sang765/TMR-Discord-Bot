@@ -19,16 +19,16 @@ type MangaDex struct {
 func (m *MangaDex) Name() string { return "MangaDex" }
 
 type mdChapter struct {
-	ID string `json:"id"`
+	ID         string `json:"id"`
 	Attributes struct {
-		Chapter     *string `json:"chapter"`
-		Title       string  `json:"title"`
-		ExternalURL *string `json:"externalUrl"`
+		Chapter     *string   `json:"chapter"`
+		Title       string    `json:"title"`
+		ExternalURL *string   `json:"externalUrl"`
 		ReadableAt  time.Time `json:"readableAt"`
 	} `json:"attributes"`
 	Relationships []struct {
-		ID   string `json:"id"`
-		Type string `json:"type"`
+		ID         string `json:"id"`
+		Type       string `json:"type"`
 		Attributes *struct {
 			Title     map[string]string   `json:"title"`
 			AltTitles []map[string]string `json:"altTitles"`
@@ -37,7 +37,7 @@ type mdChapter struct {
 }
 
 type mdResp struct {
-	Result string     `json:"result"`
+	Result string      `json:"result"`
 	Data   []mdChapter `json:"data"`
 }
 

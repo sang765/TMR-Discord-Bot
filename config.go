@@ -14,11 +14,11 @@ import (
 
 // ChannelIDs holds all Discord channel snowflakes.
 type ChannelIDs struct {
-	Status        string `yaml:"status"`
-	NovelChap     string `yaml:"novel_chap"`
-	NovelNew      string `yaml:"novel_new"`
-	MangaChap     string `yaml:"manga_chap"`
-	MangaNew      string `yaml:"manga_new"`
+	Status    string `yaml:"status"`
+	NovelChap string `yaml:"novel_chap"`
+	NovelNew  string `yaml:"novel_new"`
+	MangaChap string `yaml:"manga_chap"`
+	MangaNew  string `yaml:"manga_new"`
 }
 
 // Config is the full bot configuration.
@@ -58,13 +58,16 @@ type Config struct {
 	MoeBase       string `yaml:"moe_base"`       // default https://truyen.moe
 
 	// Sources toggles.
-	EnableDocLn      bool `yaml:"enable_docln"`
-	EnableMangaDex   bool `yaml:"enable_mangadex"`
-	EnableMoe        bool `yaml:"enable_moe"`
-	EnableCuuTruyen  bool `yaml:"enable_cuutruyen"`
+	EnableDocLn     bool `yaml:"enable_docln"`
+	EnableMangaDex  bool `yaml:"enable_mangadex"`
+	EnableMoe       bool `yaml:"enable_moe"`
+	EnableCuuTruyen bool `yaml:"enable_cuutruyen"`
 
 	// Send startup/baseline notices to the status channel.
 	StatusNotices bool `yaml:"status_notices"`
+
+	// Proxy cho cac request scrape: http://, https://, socks5://. Rong = di thang.
+	Proxy string `yaml:"proxy"`
 
 	// Debug prints scraped items without posting.
 	Debug bool `yaml:"debug"`
@@ -73,23 +76,23 @@ type Config struct {
 // LoadConfig reads config.yml, then applies env overrides.
 func LoadConfig(path string) (*Config, error) {
 	cfg := &Config{
-		PollIntervalMin:  15,
-		MaxAgeHours:      72,
-		DedupHours:       6,
-		MergeLinks:       true,
-		DocLnPages:       2,
-		MangaDexLimit:    50,
-		DocLnGroupID:     "3474",
-		MoeTeamPath:      "/team/256/the-mavericks",
-		CuuTruyenTeamID:  "+695",
-		CuuTruyenBase:    "https://cuutruyen.net",
-		DocLnBase:        "https://docln.sbs",
-		MoeBase:          "https://truyen.moe",
-		EnableDocLn:      true,
-		EnableMangaDex:   true,
-		EnableMoe:        true,
-		EnableCuuTruyen:  true,
-		StatusNotices:    true,
+		PollIntervalMin: 15,
+		MaxAgeHours:     72,
+		DedupHours:      6,
+		MergeLinks:      true,
+		DocLnPages:      2,
+		MangaDexLimit:   50,
+		DocLnGroupID:    "3474",
+		MoeTeamPath:     "/team/256/the-mavericks",
+		CuuTruyenTeamID: "+695",
+		CuuTruyenBase:   "https://cuutruyen.net",
+		DocLnBase:       "https://docln.sbs",
+		MoeBase:         "https://truyen.moe",
+		EnableDocLn:     true,
+		EnableMangaDex:  true,
+		EnableMoe:       true,
+		EnableCuuTruyen: true,
+		StatusNotices:   true,
 	}
 
 	data, err := os.ReadFile(path)
@@ -139,6 +142,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if v := os.Getenv("MOE_BASE"); v != "" {
 		cfg.MoeBase = strings.TrimRight(v, "/")
+	}
+	if v := os.Getenv("SCRAPE_PROXY"); v != "" {
+		cfg.Proxy = v
 	}
 	if v := os.Getenv("DEBUG"); v != "" {
 		cfg.Debug = v == "1" || strings.EqualFold(v, "true")

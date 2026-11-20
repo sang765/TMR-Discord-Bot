@@ -48,6 +48,14 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 
+	if cfg.Proxy != "" {
+		tr, perr := sources.NewTransport(cfg.Proxy)
+		if perr != nil {
+			log.Fatalf("proxy: %v", perr)
+		}
+		sources.HTTP.Transport = tr
+		log.Printf("scrape qua proxy: %s", cfg.Proxy)
+	}
 	dc := discord.New(cfg.DiscordToken)
 
 	app := &app{
@@ -93,9 +101,9 @@ var globalStore *store.Store
 
 type sharedStore struct{}
 
-func (sharedStore) Seen(k string) bool            { return globalStore.Seen(k) }
+func (sharedStore) Seen(k string) bool                { return globalStore.Seen(k) }
 func (sharedStore) SeenAt(k string) (time.Time, bool) { return globalStore.SeenAt(k) }
-func (sharedStore) Mark(k string, t time.Time)    { globalStore.Mark(k, t) }
+func (sharedStore) Mark(k string, t time.Time)        { globalStore.Mark(k, t) }
 
 type app struct {
 	cfg      *Config
@@ -454,10 +462,10 @@ func (a *app) mergeInto(entry store.PostedEntry, dedupKey, srcName, url, title, 
 }
 
 var sourceNames = map[string]string{
-	"docln":      "DocLn",
-	"mangadex":   "MangaDex",
-	"moe":        "Mòe Truyện",
-	"cuutruyen":  "Cứu Truyện",
+	"docln":     "DocLn",
+	"mangadex":  "MangaDex",
+	"moe":       "Mòe Truyện",
+	"cuutruyen": "Cứu Truyện",
 }
 
 var sourceColors = map[string]int{

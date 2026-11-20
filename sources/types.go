@@ -2,7 +2,12 @@
 package sources
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -45,4 +50,47 @@ type SeenStore interface {
 }
 
 // HTTP client shared by all scrapers.
+// Proxy (vd http://127.0.0.1:40000 do warp-cli/wireproxy mở) áp cho mọi nguồn HTML.
 var HTTP = &http.Client{Timeout: 45 * time.Second}
+
+// NewTransport tao http.Transport cho bot, co the di qua proxy:
+//   - "" : di thang
+//   - "http://u:p@host:port" hoac "https://..." : HTTP CONNECT proxy
+//   - "socks5://u:p@host:port" : SOCKS5 (dung dialSocks5 trong socks5.go)
+func NewTransport(proxyRaw string) (*http.Transport, error) {
+	tr := &http.Transport{
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          20,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   20 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	if proxyRaw == "" {
+		return tr, nil
+	}
+	u, err := url.Parse(proxyRaw)
+	if err != nil {
+		return nil, fmt.Errorf("proxy khong hop le %q: %w", proxyRaw, err)
+	}
+	switch u.Scheme {
+	case "http", "https":
+		tr.Proxy = http.ProxyURL(u)
+	case "socks5", "socks5h":
+		host := u.Host
+		if !strings.Contains(host, ":") {
+			host += ":1080"
+		}
+		user, pass := "", ""
+		if u.User != nil {
+			user = u.User.Username()
+			pass, _ = u.User.Password()
+		}
+		tr.Proxy = nil
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialSocks5(ctx, host, user, pass, addr)
+		}
+	default:
+		return nil, fmt.Errorf("proxy scheme %q khong ho tro (dung http/https/socks5)", u.Scheme)
+	}
+	return tr, nil
+}

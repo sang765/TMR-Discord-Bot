@@ -26,13 +26,13 @@ type PostedEntry struct {
 }
 
 type state struct {
-	Seen      map[string]time.Time    `json:"seen"`
-	Announced map[string]time.Time    `json:"announced"`
-	Posted    map[string]PostedEntry  `json:"posted"`
-	LastErr   map[string]time.Time    `json:"last_error_post"`
-	LastPoll  map[string]time.Time    `json:"last_poll"`
-	SeedFails map[string]int          `json:"seed_fails"`
-	Seeded    bool                    `json:"seeded"`
+	Seen      map[string]time.Time   `json:"seen"`
+	Announced map[string]time.Time   `json:"announced"`
+	Posted    map[string]PostedEntry `json:"posted"`
+	LastErr   map[string]time.Time   `json:"last_error_post"`
+	LastPoll  map[string]time.Time   `json:"last_poll"`
+	SeedFails map[string]int         `json:"seed_fails"`
+	Seeded    bool                   `json:"seeded"`
 }
 
 // Open loads the store from path (creating parent dirs).
