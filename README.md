@@ -163,6 +163,24 @@ Lệnh này tải đúng trang feed mà bot cào rồi đếm số mục parser 
 
 Có scheduled task định kỳ chạy lệnh này và tự sửa parser khi phát hiện markup đổi.
 
+## Build matrix CI (GitHub Actions)
+
+Mỗi push/PR lên `main` (hoặc bấm Run workflow) build 9 target, mỗi target một job riêng, artifact giữ 14 ngày kèm file `.sha256`:
+
+| Nhóm | Target | GOOS/GOARCH |
+|---|---|---|
+| Termux / Android ABI | `tmr-bot-termux-armeabi-v7a` | linux/arm GOARM=7 |
+| | `tmr-bot-termux-arm64-v8a` | linux/arm64 |
+| | `tmr-bot-termux-x86` | linux/386 |
+| | `tmr-bot-termux-x86_64` | linux/amd64 |
+| Linux | `tmr-bot-linux-amd64` / `-arm64` | linux/amd64 · linux/arm64 |
+| Windows | `tmr-bot-windows-amd64.exe` | windows/amd64 |
+| macOS | `tmr-bot-macos-arm64` / `-amd64` | darwin/arm64 · darwin/amd64 |
+
+Tại sao build Termux với `GOOS=linux`: Termux là userspace Linux chạy trên kernel Android; `GOOS=android` cần CGO + Android NDK và không tương thích binary tĩnh `CGO_ENABLED=0`. Xem thêm phần "Chạy trên Termux" ở trên.
+
+Tải artifact: tab Actions → chọn run → phần Artifacts. Đổi tên theo nhu cầu sau khi tải (ví dụ `mv tmr-bot-termux-armeabi-v7a tmr-bot-armv7`).
+
 ## Cập nhật
 
 `run.sh` tự `git fetch` + build lại mỗi lần khởi động, giữ nguyên `.env` và `config/config.yml`.
