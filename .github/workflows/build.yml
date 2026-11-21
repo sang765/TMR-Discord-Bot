@@ -5,7 +5,6 @@ name: Build per ABI and platform
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -105,37 +104,55 @@ jobs:
 
   release:
     name: Publish release
-    # Chỉ chạy khi push tag v* (vd v1.4.1). Build matrix ở trên là dependency.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Chạy sau build trên MỌI push. Push mà diff chỉ toàn file .md thì bỏ qua.
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Skip push chỉ sửa .md
+        id: diff
+        run: |
+          non_md=0
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            while IFS= read -r f; do
+              case "$f" in *.md) ;; *) non_md=1 ;; esac
+            done < <(git diff --name-only HEAD^ HEAD)
+          else
+            non_md=1 # commit đầu không có HEAD^ — cứ release
+          fi
+          if [ "$non_md" -eq 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Chỉ có file .md đổi — bỏ qua release"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/download-artifact@v8
+        if: steps.diff.outputs.skip != 'true'
         with:
           path: dist
           merge-multiple: true
 
-      - name: Verify version in main.go matches tag
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          ver=$(grep -E '^var version = ' main.go | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          if [ "$ver" != "${TAG#v}" ]; then
-            echo "Tag $TAG nhưng main.go version $ver — hãy bump version trước khi tag" >&2
-            exit 1
-          fi
-
       - name: Create GitHub Release
+        if: steps.diff.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
         run: |
-          gh release create "$TAG" dist/* \
-            --title "$TAG (${SHA::7})" \
+          ver=$(grep -E '^var version = ' main.go | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          short="${SHA::7}"
+          tag="v${ver}-${short}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag đã tồn tại — bỏ qua"
+            exit 0
+          fi
+          gh release create "$tag" dist/* \
+            --title "$tag" \
             --generate-notes \
-            --verify-tag
+            --target "$SHA"
