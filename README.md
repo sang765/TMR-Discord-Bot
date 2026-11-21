@@ -183,6 +183,14 @@ Tại sao build Termux với `GOOS=linux`: Termux là userspace Linux chạy tr�
 
 Tải artifact: tab Actions → chọn run → phần Artifacts. Đổi tên theo nhu cầu sau khi tải (ví dụ `mv tmr-bot-termux-armeabi-v7a tmr-bot-armv7`).
 
+Hoặc dùng `run_release.sh` — tự nhận diện OS/ABI (kể cả Termux vs Linux thường), lấy binary mới nhất từ GitHub Release, verify SHA-256 rồi chạy luôn:
+
+    ./run_release.sh                  # tải + chạy
+    NO_RUN=1 ./run_release.sh         # chỉ tải/verify, không chạy
+    DEST=/path/to/dir ./run_release.sh  # đổi thư mục chứa binary (.env phải ở đó)
+
+Script chỉ cần `curl`; có `GH_TOKEN` thì dùng để tránh rate limit API. Nếu máy không có `sha256sum`/`shasum` thì bỏ qua verify (có cảnh báo). Đặt script cạnh `.env` (vd `~/discord-bot/` trên Termux) để bot đọc cấu hình đúng.
+
 ## Cập nhật
 
 `run.sh` tự `git fetch` + build lại mỗi lần khởi động, giữ nguyên `.env` và `config/config.yml`.
