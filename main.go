@@ -27,12 +27,16 @@ func main() {
 	once := flag.Bool("once", false, "chạy một lần poll rồi thoát")
 	dry := flag.Bool("dry", false, "in thông báo ra stdout, không gửi Discord")
 	forceSeed := flag.Bool("seed", false, "nạp lại dữ liệu nền (không thông báo mục cũ)")
+	check := flag.Bool("check", false, "probe cấu trúc 4 nguồn (không đụng state, không gửi Discord)")
 	ver := flag.Bool("version", false, "in version")
 	flag.Parse()
 
 	if *ver {
 		fmt.Println("tmr-bot", version)
 		return
+	}
+	if *check {
+		os.Exit(runCheck(*cfgPath))
 	}
 
 	loadDotEnv(".env")
@@ -68,6 +72,58 @@ func main() {
 	if err := app.run(*once, *forceSeed); err != nil {
 		log.Fatalf("run: %v", err)
 	}
+}
+
+// runCheck chỉ probe cấu trúc các nguồn. Dùng cho auto-task bảo trì: chạy định
+// kỳ phát hiện site đổi markup trước khi bot âm thầm không cào được nữa.
+// Không mở store, không gửi Discord. Exit 1 nếu có nguồn lỗi.
+func runCheck(cfgPath string) int {
+	loadDotEnv(".env")
+	cfg, err := LoadConfig(cfgPath)
+	if err != nil && os.Getenv("DISCORD_TOKEN") == "" {
+		// check mode không cần token — chỉ đọc domain overrides từ config.yml
+		os.Setenv("DISCORD_TOKEN", "check-only")
+		cfg, err = LoadConfig(cfgPath)
+	}
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if cfg.Proxy != "" {
+		tr, perr := sources.NewTransport(cfg.Proxy)
+		if perr != nil {
+			log.Printf("proxy: %v", perr)
+			return 1
+		}
+		sources.HTTP.Transport = tr
+	} else {
+		sources.HTTP.Transport = sources.NewDirectTransport()
+	}
+
+	fetchers := buildFetchers(cfg)
+	fmt.Printf("tmr-bot %s — probe cấu trúc %d nguồn\n", version, len(fetchers))
+	failed := 0
+	for _, f := range fetchers {
+		p, ok := f.(interface{ Probe() (int, error) })
+		if !ok {
+			fmt.Printf("  %-12s SKIP  (fetcher không hỗ trợ probe)\n", f.Name())
+			continue
+		}
+		start := time.Now()
+		n, perr := p.Probe()
+		status := "OK"
+		if perr != nil {
+			status, failed = "FAIL", failed+1
+		}
+		fmt.Printf("  %-12s %-4s %3d mục  %-8s %v\n",
+			f.Name(), status, n, time.Since(start).Round(time.Millisecond), perr)
+	}
+	if failed > 0 {
+		fmt.Printf("KẾT LUẬN: %d/%d nguồn lỗi\n", failed, len(fetchers))
+		return 1
+	}
+	fmt.Println("KẾT LUẬN: cả 4 nguồn vẫn parse được")
+	return 0
 }
 
 func buildFetchers(cfg *Config) []sources.Fetcher {

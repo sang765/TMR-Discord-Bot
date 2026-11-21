@@ -152,6 +152,17 @@ chân card có thời gian. Khi merge đa nguồn, bot PATCH tin gốc và chèn
 - Tin nhắn cũ kiểu embed (trước v1.4) vẫn được merge theo kiểu cũ khi PATCH lại.
 - Tool kiểm tra payload với API thật (gửi rồi tự xoá): `go run ./cmd/v2test`.
 
+## Kiểm tra cấu trúc nguồn (auto-task bảo trì)
+
+    go run . --check
+
+Lệnh này tải đúng trang feed mà bot cào rồi đếm số mục parser trích được — **không đọc/ghi state, không gửi Discord**. Exit 0 nếu cả 4 nguồn parse được, exit 1 nếu có nguồn lỗi. Dùng để phát hiện site đổi markup trước khi bot âm thầm không cào được nữa.
+
+- `HTTP 200 nhưng 0 mục` → cấu trúc đổi (class/regex/JSON shape), cần sửa parser trong `sources/`.
+- `403/429/DNS/TLS` → lỗi hạ tầng/bị chặn, **đừng sửa parser**; cân nhắc mirror hoặc proxy.
+
+Có scheduled task định kỳ chạy lệnh này và tự sửa parser khi phát hiện markup đổi.
+
 ## Cập nhật
 
 `run.sh` tự `git fetch` + build lại mỗi lần khởi động, giữ nguyên `.env` và `config/config.yml`.

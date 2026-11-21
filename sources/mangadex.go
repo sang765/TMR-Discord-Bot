@@ -78,8 +78,8 @@ func (m *MangaDex) pickTitle(t map[string]string, alt []map[string]string) strin
 	return "Không rõ tiêu đề"
 }
 
-// Fetch implements Fetcher.
-func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
+// apiURL dựng URL feed — dùng chung cho Fetch và Probe để không bị lệch tham số.
+func (m *MangaDex) apiURL() string {
 	limit := m.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 50
@@ -99,10 +99,13 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 	for _, cr := range []string{"safe", "suggestive", "erotica"} {
 		q.Add("contentRating[]", cr)
 	}
-	api := "https://api.mangadex.org/chapter?" + q.Encode()
+	return "https://api.mangadex.org/chapter?" + q.Encode()
+}
 
+// Fetch implements Fetcher.
+func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 	// API của MangaDex CHẾ request giả browser (challenge) — dùng header API thẳng
-	req, _ := newRequest("GET", api)
+	req, _ := newRequest("GET", m.apiURL())
 	body, code, err := doRequest(req)
 	if err != nil {
 		return nil, err
