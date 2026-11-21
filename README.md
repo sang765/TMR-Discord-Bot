@@ -165,7 +165,7 @@ Có scheduled task định kỳ chạy lệnh này và tự sửa parser khi ph�
 
 ## Build matrix CI (GitHub Actions)
 
-Mỗi push/PR lên `main` (hoặc bấm Run workflow) build 9 target, mỗi target một job riêng, artifact giữ 14 ngày kèm file `.sha256`. Push tag `v*` (vd `v1.4.0`) thì sau khi build xong tự tạo GitHub Release, đính kèm cả 9 binary + checksum, title dạng `v1.4.0 (a1b2c3d)` (short SHA của commit được tag), notes tự sinh từ git log. Workflow sẽ fail nếu tag không khớp `var version` trong `main.go`.
+Mỗi push/PR lên `main` (hoặc bấm Run workflow) build 9 target, mỗi target một job riêng, artifact giữ 14 ngày kèm file `.sha256`. Sau mỗi push lên `main` (trừ push mà diff chỉ toàn file `.md`), workflow tự tạo GitHub Release: tag và title dạng `v1.4.0-a1b2c3d` (version trong `main.go` + short SHA của commit), đính kèm cả 9 binary + checksum, notes tự sinh từ git log. Release đã tồn tại thì bỏ qua, không tạo lại.
 
 Các target:
 
