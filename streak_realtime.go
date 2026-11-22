@@ -174,6 +174,7 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 						continue
 					}
 					day := store.VNDay(ts)
+					log.Printf("gateway: MSG user=%s channel=%s day=%s", m.Author.ID, m.ChannelID, day)
 					st.MarkDay(m.Author.ID, day)
 					if !st.IsAwarded(m.Author.ID) && st.Qualified(need, store.VNDay(time.Now())) != nil {
 						// Qualified trả cả user khác — check lại chính user này

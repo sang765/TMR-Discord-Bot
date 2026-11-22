@@ -200,6 +200,8 @@ Bot tự cấp role `1444365043667046522` cho ai chat đủ **3 ngày lịch VN 
 - Lưu lịch sử ở `data/streaks.json` (riêng `data/state.json`). Không thu role khi đứt chuỗi.
 - Test không gán role thật: `go run . --streak --dry`. Chạy 1 lần thật: `go run . --streak`.
 
+**Realtime (từ v1.6):** bot nối Discord Gateway qua websocket tự viết (stdlib, không dependency), nhận `MESSAGE_CREATE` và mark ngày + cấp role **ngay lập tức**, không còn đợi 6h. Chỉ xin `intents = 0` — không cần bật Message Content Intent vì streak chỉ dùng `author.id` + `timestamp`, không đọc nội dung tin. Tự reconnect (exponential backoff 2s→60s) + heartbeat theo `heartbeat_interval` từ HELLO. REST backfill vẫn chạy lúc khởi động + mỗi 6h để lo lịch sử cũ. Debug: `go run . --gateway --dry`.
+
 **Yêu cầu quyền:** bot cần **Manage Roles** trong server, và role cần cấp phải thấp hơn role cao nhất của bot. Thiếu quyền → log `403` và không ai được gán. Config `guild_id` phải là ID server thật (`1201419657282863104`), không phải ID kênh.
 
 ## Cập nhật

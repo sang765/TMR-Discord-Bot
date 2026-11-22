@@ -265,7 +265,17 @@ func (c *Client) doAPI(method, url string) ([]byte, int, error) {
 	// Discord API ưu tiên API-style UA (giống newRequest trong sources)
 	req.Header.Set("User-Agent", "DiscordBot (https://github.com/sang765/TMR-Discord-Bot, v1.4)")
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for attempt := 0; attempt < 8; attempt++ {
+		if attempt > 0 {
+			// tạo lại request vì body đã đọc ở lần trước (cần cho PUT role)
+			req, err = http.NewRequest(method, url, nil)
+			if err != nil {
+				return nil, 0, err
+			}
+			req.Header.Set("Authorization", "Bot "+c.Token)
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "DiscordBot (https://github.com/sang765/TMR-Discord-Bot, v1.5)")
+		}
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
 			return nil, 0, err
