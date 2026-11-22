@@ -125,7 +125,9 @@ if [ -z "${TZ:-}" ]; then
   off="$(date +%z)"                       # vd +0700
   case "$off" in
     [+-][0-9][0-9][0-9][0-9])
-      sign="${off:0:1}"; hh=$((10#${off:1:2}))
+      sign="$(printf '%s' "$off" | cut -c1)"
+      hh="$(printf '%s' "$off" | cut -c2-3 | sed 's/^0//')"
+      [ -z "$hh" ] && hh=0
       if [ "$sign" = "+" ]; then export "TZ=Etc/GMT-$hh"; else export "TZ=Etc/GMT+$hh"; fi
       ;;
   esac
