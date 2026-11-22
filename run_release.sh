@@ -118,4 +118,16 @@ if [ "${NO_RUN:-0}" = 1 ]; then
 fi
 
 cd "$DIR" || exit 1
+# Termux thường không có file localtime/zoneinfo -> Go log mặc định UTC (lệch
+# 7h với VN, dễ nhầm là bot treo). Go có sẵn vùng Etc/GMT (dấu PHẢI ĐẢO:
+# UTC+7 = Etc/GMT-7). Tính từ `date +%z` của máy nên vẫn đúng nếu chạy nơi khác.
+if [ -z "${TZ:-}" ]; then
+  off="$(date +%z)"                       # vd +0700
+  case "$off" in
+    [+-][0-9][0-9][0-9][0-9])
+      sign="${off:0:1}"; hh=$((10#${off:1:2}))
+      if [ "$sign" = "+" ]; then export "TZ=Etc/GMT-$hh"; else export "TZ=Etc/GMT+$hh"; fi
+      ;;
+  esac
+fi
 exec "$target" "$@"
