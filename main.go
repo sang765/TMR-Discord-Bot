@@ -594,8 +594,9 @@ func buildMessage(roleID string, it sources.Item) discord.Message {
 		discord.Component{Type: discord.CompTextDisplay, Content: footerLine(src, it)},
 	)
 	return discord.Message{
-		Flags:      discord.FlagComponentsV2,
-		Components: []discord.Component{{Type: discord.CompContainer, AccentColor: color, Components: inner}},
+		AllowedMentions: &discord.AllowedMentions{Parse: []string{}, Roles: []string{roleID}},
+		Flags:           discord.FlagComponentsV2,
+		Components:      []discord.Component{{Type: discord.CompContainer, AccentColor: color, Components: inner}},
 	}
 }
 

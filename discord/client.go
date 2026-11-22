@@ -43,12 +43,20 @@ type Embed struct {
 	Footer      *EmbedFooter `json:"footer,omitempty"`
 }
 
+// AllowedMentions kiểm soát ai được ping. Với Components V2, role mention nằm
+// trong text display component CHỈ ping khi role ID có trong Roles.
+type AllowedMentions struct {
+	Parse []string `json:"parse,omitempty"` // vd [] để chặn @everyone
+	Roles []string `json:"roles,omitempty"`
+}
+
 // Message is the outgoing payload.
 type Message struct {
-	Content    string      `json:"content,omitempty"`
-	Embeds     []Embed     `json:"embeds,omitempty"`
-	Flags      int         `json:"flags,omitempty"`
-	Components []Component `json:"components,omitempty"`
+	Content         string           `json:"content,omitempty"`
+	Embeds          []Embed          `json:"embeds,omitempty"`
+	Flags           int              `json:"flags,omitempty"`
+	Components      []Component      `json:"components,omitempty"`
+	AllowedMentions *AllowedMentions `json:"allowed_mentions,omitempty"`
 }
 
 // FlagComponentsV2 bật chế độ Components V2 (text display / container / button).

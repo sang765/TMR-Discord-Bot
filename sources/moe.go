@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -52,6 +53,37 @@ func chapToManga(path string) string {
 	return path
 }
 
+// moeCover lấy URL ảnh bìa từ trang manga (og:image). Panel "Hoạt động gần đây"
+// không có ảnh, nên phải fetch thêm 1 request cho mỗi truyện có cập nhật mới.
+// og:image thường có dạng CDN#media-fallback=<url thật> — ưu tiên fallback vì
+// Discord MediaGallery không xử lý fragment '#' tốt.
+var moeOgRe = regexp.MustCompile(`(?s)<meta[^>]+(?:og:image|twitter:image)[^>]+content="([^"]+)"`)
+var moeFallbackRe = regexp.MustCompile(`[#&]media-fallback=([^"&]+)`)
+
+func (m *Moe) cover(mangaPath string) string {
+	page := strings.TrimRight(m.Base, "/") + mangaPath
+	req, err := newBrowserRequest("GET", page)
+	if err != nil {
+		return ""
+	}
+	body, code, err := doRequest(req)
+	if err != nil || code != 200 {
+		return ""
+	}
+	mg := moeOgRe.FindStringSubmatch(body)
+	if len(mg) < 2 {
+		return ""
+	}
+	img := mg[1]
+	if f := moeFallbackRe.FindStringSubmatch(img); len(f) >= 2 {
+		if decoded, err := url.QueryUnescape(f[1]); err == nil {
+			return decoded
+		}
+		return f[1]
+	}
+	return img
+}
+
 // Fetch implements Fetcher.
 func (m *Moe) Fetch(seed bool) ([]Item, error) {
 	url := strings.TrimRight(m.Base, "/") + m.TeamPath
@@ -87,6 +119,15 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 	now := time.Now()
 	var items []Item
 	emitted := map[string]bool{}
+	coverCache := map[string]string{}
+	coverOf := func(path string) string {
+		if c, ok := coverCache[path]; ok {
+			return c
+		}
+		c := m.cover(path)
+		coverCache[path] = c
+		return c
+	}
 
 	for _, it := range parsed {
 		mangaKey := "moe:m:" + it.mangaPath
@@ -102,8 +143,9 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 			}
 			items = append(items, Item{
 				Source: "moe", Kind: KindNewSeries,
-				Title: it.title,
-				URL:   AbsoluteURL(m.Base, it.mangaPath),
+				Title:    it.title,
+				URL:      AbsoluteURL(m.Base, it.mangaPath),
+				CoverURL: coverOf(it.mangaPath),
 				Chapter: func() string {
 					if strings.HasPrefix(it.chapLabel, "Ch ") {
 						return "Chương " + strings.TrimSpace(strings.TrimPrefix(it.chapLabel, "Ch "))
@@ -130,6 +172,7 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 			Source: "moe", Kind: KindChapter,
 			Title: it.title, Chapter: label,
 			URL:       AbsoluteURL(m.Base, it.chapPath),
+			CoverURL:  coverOf(it.mangaPath),
 			Published: pub,
 		})
 	}

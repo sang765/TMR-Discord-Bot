@@ -93,6 +93,7 @@ func (m *MangaDex) apiURL() string {
 	q.Set("limit", fmt.Sprint(limit))
 	q.Set("order[readableAt]", "desc")
 	q.Set("includes[]", "manga")
+	q.Add("includes[]", "cover_art") // cần để có fileName dựng ảnh bìa
 	for _, l := range langs {
 		q.Add("translatedLanguage[]", l)
 	}
