@@ -213,6 +213,24 @@ func MentionRole(roleID string) string {
 	return "<@&" + roleID + ">"
 }
 
+// GetGatewayURL trả URL websocket của Discord gateway (REST /gateway/bot).
+func (c *Client) GetGatewayURL() (string, error) {
+	body, _, err := c.doAPI("GET", "https://discord.com/api/v10/gateway/bot")
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", err
+	}
+	if r.URL == "" {
+		return "", fmt.Errorf("gateway URL trống")
+	}
+	return r.URL, nil
+}
+
 // ---- Chat streak support (REST-only, không cần gateway intent) ----
 
 // GuildChannel là kênh trong guild (chỉ lấy field cần thiết).

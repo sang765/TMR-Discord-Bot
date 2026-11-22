@@ -29,6 +29,7 @@ func main() {
 	forceSeed := flag.Bool("seed", false, "nạp lại dữ liệu nền (không thông báo mục cũ)")
 	check := flag.Bool("check", false, "probe cấu trúc 4 nguồn (không đụng state, không gửi Discord)")
 	streakOnly := flag.Bool("streak", false, "quét chat streak 1 lần rồi thoát (dùng với --dry để test)")
+	gateway := flag.Bool("gateway", false, "chỉ chạy gateway realtime (debug)")
 	ver := flag.Bool("version", false, "in version")
 	flag.Parse()
 
@@ -72,6 +73,10 @@ func main() {
 
 	if *streakOnly {
 		app.runStreakCheck(*dry)
+		return
+	}
+	if *gateway {
+		app.runGateway()
 		return
 	}
 
@@ -223,8 +228,9 @@ func (a *app) run(once, forceSeed bool) error {
 		return nil
 	}
 
-	// Chat streak: quét lúc khởi động rồi mỗi 6h (tách khỏi poll 15p).
+	// Chat streak: REST backfill lúc khởi động + mỗi 6h; realtime qua gateway.
 	a.runStreakCheck(a.dry)
+	go a.runGateway()
 
 	streakTicker := time.NewTicker(6 * time.Hour)
 	defer streakTicker.Stop()
