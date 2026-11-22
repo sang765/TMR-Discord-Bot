@@ -16,6 +16,16 @@ func itoa(n int) string { return strconv.Itoa(n) }
 
 const streakStateFile = "data/streaks.json"
 
+// streakBackfillTicker chạy REST backfill mỗi 6h (chạy goroutine riêng để
+// không block gateway/MESSAGE_CREATE).
+func (a *app) streakBackfillTicker(dry bool) {
+	t := time.NewTicker(6 * time.Hour)
+	defer t.Stop()
+	for range t.C {
+		a.runStreakCheck(dry)
+	}
+}
+
 // runStreakCheck thực hiện 1 lần quét + gán role.
 // dry=true: chỉ log, không gán role, không gửi thông báo.
 func (a *app) runStreakCheck(dry bool) {

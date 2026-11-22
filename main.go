@@ -228,12 +228,13 @@ func (a *app) run(once, forceSeed bool) error {
 		return nil
 	}
 
-	// Chat streak: REST backfill lúc khởi động + mỗi 6h; realtime qua gateway.
-	a.runStreakCheck(a.dry)
+	// Chat streak: nối gateway TRƯỚC để realtime không bị block bởi REST backfill
+	// (backfill có thể mất vài phút do 429). Backfill chạy nền sau đó + mỗi 6h.
 	go a.runGateway()
-
-	streakTicker := time.NewTicker(6 * time.Hour)
-	defer streakTicker.Stop()
+	go func() {
+		a.runStreakCheck(a.dry)
+		a.streakBackfillTicker(a.dry)
+	}()
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -247,8 +248,6 @@ func (a *app) run(once, forceSeed bool) error {
 			log.Println("tắt bot, lưu state...")
 			_ = a.st.Save("data/state.json")
 			return nil
-		case <-streakTicker.C:
-			a.runStreakCheck(a.dry)
 		case <-ticker.C:
 			if !a.st.Seeded() {
 				// seed lần trước lỗi (nguồn bị chặn...) -> thử lại, xong thì poll luôn
