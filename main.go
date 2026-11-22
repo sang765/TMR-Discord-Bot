@@ -20,7 +20,7 @@ import (
 	"tmr-bot/store"
 )
 
-var version = "1.4.0"
+var version = "1.5.0"
 
 func main() {
 	cfgPath := flag.String("config", "config/config.yml", "đường dẫn file config")
@@ -28,6 +28,7 @@ func main() {
 	dry := flag.Bool("dry", false, "in thông báo ra stdout, không gửi Discord")
 	forceSeed := flag.Bool("seed", false, "nạp lại dữ liệu nền (không thông báo mục cũ)")
 	check := flag.Bool("check", false, "probe cấu trúc 4 nguồn (không đụng state, không gửi Discord)")
+	streakOnly := flag.Bool("streak", false, "quét chat streak 1 lần rồi thoát (dùng với --dry để test)")
 	ver := flag.Bool("version", false, "in version")
 	flag.Parse()
 
@@ -67,6 +68,11 @@ func main() {
 	app := &app{
 		cfg: cfg, st: st, dc: dc, dry: *dry,
 		fetchers: buildFetchers(cfg),
+	}
+
+	if *streakOnly {
+		app.runStreakCheck(*dry)
+		return
 	}
 
 	if err := app.run(*once, *forceSeed); err != nil {
@@ -217,6 +223,12 @@ func (a *app) run(once, forceSeed bool) error {
 		return nil
 	}
 
+	// Chat streak: quét lúc khởi động rồi mỗi 6h (tách khỏi poll 15p).
+	a.runStreakCheck(a.dry)
+
+	streakTicker := time.NewTicker(6 * time.Hour)
+	defer streakTicker.Stop()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -229,6 +241,8 @@ func (a *app) run(once, forceSeed bool) error {
 			log.Println("tắt bot, lưu state...")
 			_ = a.st.Save("data/state.json")
 			return nil
+		case <-streakTicker.C:
+			a.runStreakCheck(a.dry)
 		case <-ticker.C:
 			if !a.st.Seeded() {
 				// seed lần trước lỗi (nguồn bị chặn...) -> thử lại, xong thì poll luôn

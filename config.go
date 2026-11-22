@@ -71,6 +71,17 @@ type Config struct {
 
 	// Debug prints scraped items without posting.
 	Debug bool `yaml:"debug"`
+
+	// Chat streak: cấp role sau N ngày lịch VN liên tiếp có ít nhất 1 tin nhắn.
+	Streak struct {
+		Enabled      bool     `yaml:"enabled"`
+		RoleID       string   `yaml:"role_id"`
+		Days         int      `yaml:"days"`          // default 3
+		BackfillDays int      `yaml:"backfill_days"` // default 7
+		Exclude      []string `yaml:"exclude"`       // channel ID bỏ qua (vd bot-setup)
+		Announce     bool     `yaml:"announce"`      // báo khi cấp role
+		AnnounceCh   string   `yaml:"announce_channel"`
+	} `yaml:"streak"`
 }
 
 // LoadConfig reads config.yml, then applies env overrides.
@@ -94,6 +105,12 @@ func LoadConfig(path string) (*Config, error) {
 		EnableCuuTruyen: true,
 		StatusNotices:   true,
 	}
+	cfg.Streak.Enabled = true
+	cfg.Streak.RoleID = "1444365043667046522" // Con Dân Tích Cực
+	cfg.Streak.Days = 3
+	cfg.Streak.BackfillDays = 7
+	cfg.Streak.Announce = true
+	cfg.Streak.Exclude = []string{}
 
 	data, err := os.ReadFile(path)
 	if err == nil {
@@ -145,6 +162,14 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if v := os.Getenv("SCRAPE_PROXY"); v != "" {
 		cfg.Proxy = v
+	}
+	if v := os.Getenv("STREAK_ROLE_ID"); v != "" {
+		cfg.Streak.RoleID = v
+	}
+	if v := os.Getenv("STREAK_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Streak.Days = n
+		}
 	}
 	if v := os.Getenv("DEBUG"); v != "" {
 		cfg.Debug = v == "1" || strings.EqualFold(v, "true")

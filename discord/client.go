@@ -212,3 +212,124 @@ func MentionRole(roleID string) string {
 	}
 	return "<@&" + roleID + ">"
 }
+
+// ---- Chat streak support (REST-only, không cần gateway intent) ----
+
+// GuildChannel là kênh trong guild (chỉ lấy field cần thiết).
+type GuildChannel struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Type   int    `json:"type"` // 0 = text, 5 = announcement, 4/11 = category/thread
+	NSFW   bool   `json:"nsfw"`
+	Parent string `json:"parent_id"`
+}
+
+// GuildMessage là một tin nhắn trong kênh (chỉ lấy field cần thiết).
+type GuildMessage struct {
+	ID        string `json:"id"`
+	ChannelID string `json:"channel_id"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"` // RFC3339
+	Author    struct {
+		ID     string `json:"id"`
+		Bot    bool   `json:"bot"`
+		System bool   `json:"system"`
+	} `json:"author"`
+}
+
+func (c *Client) doAPI(method, url string) ([]byte, int, error) {
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bot "+c.Token)
+	req.Header.Set("Content-Type", "application/json")
+	// Discord API ưu tiên API-style UA (giống newRequest trong sources)
+	req.Header.Set("User-Agent", "DiscordBot (https://github.com/sang765/TMR-Discord-Bot, v1.4)")
+
+	for attempt := 0; attempt < 4; attempt++ {
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			return nil, 0, err
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		resp.Body.Close()
+		switch {
+		case resp.StatusCode >= 200 && resp.StatusCode < 300:
+			return body, resp.StatusCode, nil
+		case resp.StatusCode == 429:
+			var rl struct {
+				RetryAfter float64 `json:"retry_after"`
+			}
+			_ = json.Unmarshal(body, &rl)
+			if rl.RetryAfter <= 0 {
+				rl.RetryAfter = 1
+			}
+			time.Sleep(time.Duration(rl.RetryAfter*1000) * time.Millisecond)
+			continue
+		case resp.StatusCode >= 500:
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+			continue
+		default:
+			return body, resp.StatusCode, fmt.Errorf("discord API %s HTTP %d: %.200s", method, resp.StatusCode, body)
+		}
+	}
+	return nil, 0, fmt.Errorf("discord API %s: retry exhausted", method)
+}
+
+// ListGuildChannels trả về các kênh text (type 0) của guild.
+func (c *Client) ListGuildChannels(guildID string) ([]GuildChannel, error) {
+	body, _, err := c.doAPI("GET", "https://discord.com/api/v10/guilds/"+guildID+"/channels")
+	if err != nil {
+		return nil, err
+	}
+	var all []GuildChannel
+	if err := json.Unmarshal(body, &all); err != nil {
+		return nil, err
+	}
+	var out []GuildChannel
+	for _, ch := range all {
+		if ch.Type == 0 {
+			out = append(out, ch)
+		}
+	}
+	return out, nil
+}
+
+// ListMessages lấy tối đa limit tin nhắn của kênh. `before`/`after` là snowflake;
+// để trống thì lấy mới nhất. limit <= 0 hoặc > 100 thì dùng 100.
+// Trả về theo thứ tự Discord (mới nhất trước).
+func (c *Client) ListMessages(channelID, before, after string, limit int) ([]GuildMessage, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages?limit=%d", channelID, limit)
+	if before != "" {
+		url += "&before=" + before
+	}
+	if after != "" {
+		url += "&after=" + after
+	}
+	body, _, err := c.doAPI("GET", url)
+	if err != nil {
+		return nil, err
+	}
+	var msgs []GuildMessage
+	if err := json.Unmarshal(body, &msgs); err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
+// AddRole gán role cho member. Discord trả 204 No Content khi thành công.
+func (c *Client) AddRole(guildID, userID, roleID string) error {
+	url := fmt.Sprintf("https://discord.com/api/v10/guilds/%s/members/%s/roles/%s", guildID, userID, roleID)
+	_, code, err := c.doAPI("PUT", url)
+	if err != nil {
+		return err
+	}
+	if code != 204 && code != 200 {
+		return fmt.Errorf("add role HTTP %d", code)
+	}
+	return nil
+}

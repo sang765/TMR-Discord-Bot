@@ -2,7 +2,7 @@
 # Token nên để trong .env (DISCORD_TOKEN=...) — không commit token vào file này!
 
 discord_token: ""            # hoặc dùng .env
-guild_id: "1447576235550052455"
+guild_id: "1201419657282863104" # [TMR] The Mavericks (1447576235550052455 là ID kênh bot-status, không phải guild)
 role_id: "1424440045116330204" # @PING TRUYỆN MỚI VÀ CHAP MỚI
 
 channels:
@@ -48,3 +48,24 @@ proxy: ""
 
 # true = chỉ in thông báo ra log, không gửi Discord
 debug: false
+
+# Chat streak: tự cấp role cho người chat đủ N ngày lịch VN LIÊN TIẾP.
+# Bỏ qua tin nhắn từ bot. Không thu role khi đứt chuỗi (giữ vĩnh viễn).
+streak:
+  enabled: true
+  role_id: "1444365043667046522" # Con Dân Tích Cực
+  days: 3
+  backfill_days: 7               # lần đầu quét ngược 7 ngày
+  announce: true
+  announce_channel: "1450210927101083799" # 📢 server-update
+  # Chỉ loại các kênh công cụ/đăng tin — mọi text channel khác đều được tính.
+  exclude:
+    - "1419647802371346512"      # bot-setup
+    - "1420223890302435419"      # rules
+    - "1457032481579470910"      # application
+    - "1442445677446697010"      # channel-in4
+    - "1420232183511126057"      # thông-tin-role / pick-role (cùng ID)
+    - "1422046397577957426"      # giveaway
+    - "1422046532118777996"      # bằng-chứng-trao-thưởng
+    - "1442588987737768027"      # khu-lệnh-bot
+    - "1450210927101083799"      # server-update (announcement, đã loại theo type)

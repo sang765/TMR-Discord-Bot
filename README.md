@@ -191,6 +191,17 @@ Hoặc dùng `run_release.sh` — tự nhận diện OS/ABI (kể cả Termux vs
 
 Script chỉ cần `curl`; có `GH_TOKEN` thì dùng để tránh rate limit API. Nếu máy không có `sha256sum`/`shasum` thì bỏ qua verify (có cảnh báo). Đặt script cạnh `.env` (vd `~/discord-bot/` trên Termux) để bot đọc cấu hình đúng.
 
+## Chat streak — role "Con Dân Tích Cực" (từ v1.5.0)
+
+Bot tự cấp role `1444365043667046522` cho ai chat đủ **3 ngày lịch VN liên tiếp** (có ít nhất 1 tin nhắn/ngày). Đã bật mặc định trong `config/config.yml` → mục `streak`.
+
+- Quét mọi text channel (trừ announcement/thread/NSFW và các ID trong `streak.exclude`), bỏ qua tin nhắn từ bot.
+- Lần đầu quét ngược `backfill_days` (mặc định 7 ngày); sau đó chạy lúc khởi động + mỗi 6h.
+- Lưu lịch sử ở `data/streaks.json` (riêng `data/state.json`). Không thu role khi đứt chuỗi.
+- Test không gán role thật: `go run . --streak --dry`. Chạy 1 lần thật: `go run . --streak`.
+
+**Yêu cầu quyền:** bot cần **Manage Roles** trong server, và role cần cấp phải thấp hơn role cao nhất của bot. Thiếu quyền → log `403` và không ai được gán. Config `guild_id` phải là ID server thật (`1201419657282863104`), không phải ID kênh.
+
 ## Cập nhật
 
 `run.sh` tự `git fetch` + build lại mỗi lần khởi động, giữ nguyên `.env` và `config/config.yml`.
