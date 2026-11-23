@@ -24,8 +24,9 @@ type RealtimeMessage struct {
 	GuildID   string `json:"guild_id"`
 	Timestamp string `json:"timestamp"`
 	Author    struct {
-		ID  string `json:"id"`
-		Bot bool   `json:"bot"`
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Bot      bool   `json:"bot"`
 	} `json:"author"`
 	Member json.RawMessage `json:"member"`
 }
@@ -179,7 +180,7 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 					if !st.IsAwarded(m.Author.ID) && st.Qualified(need, store.VNDay(time.Now())) != nil {
 						// Qualified trả cả user khác — check lại chính user này
 						if hasStreak(st, m.Author.ID, need) {
-							a.grantRole(st, m.Author.ID)
+							a.grantRole(st, m.Author.ID, m.Author.Username)
 						}
 					}
 					_ = st.Save(streakStateFile)
@@ -198,12 +199,16 @@ func hasStreak(st *store.StreakStore, userID string, need int) bool {
 	return false
 }
 
-func (a *app) grantRole(st *store.StreakStore, userID string) {
+func (a *app) grantRole(st *store.StreakStore, userID, username string) {
+	if username == "" {
+		username = a.dc.GetUsername(userID)
+	}
+	reason := fmt.Sprintf("Người dùng %s đã đạt chuỗi %d ngày liên tục. Đã cấp quyền Attach File và Embed Link.", username, a.cfg.Streak.Days)
 	if a.dry {
-		log.Printf("gateway: [dry] cấp role cho %s", userID)
+		log.Printf("gateway: [dry] cấp role cho %s — reason: %s", userID, reason)
 		return
 	}
-	if err := a.dc.AddRole(a.cfg.GuildID, userID, a.cfg.Streak.RoleID); err != nil {
+	if err := a.dc.AddRole(a.cfg.GuildID, userID, a.cfg.Streak.RoleID, reason); err != nil {
 		log.Printf("gateway: gán role cho %s: %v", userID, err)
 		return
 	}

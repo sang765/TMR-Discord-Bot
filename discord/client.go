@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
+	"strings"
 	"time"
 )
 
@@ -221,6 +223,22 @@ func MentionRole(roleID string) string {
 	return "<@&" + roleID + ">"
 }
 
+// GetUsername lấy username theo user ID (dùng cho REST backfill, nơi không có
+// MESSAGE_CREATE payload). Trả ID nếu lỗi.
+func (c *Client) GetUsername(userID string) string {
+	body, _, err := c.doAPI("GET", "https://discord.com/api/v10/users/"+userID)
+	if err != nil {
+		return userID
+	}
+	var u struct {
+		Username string `json:"username"`
+	}
+	if json.Unmarshal(body, &u) == nil && u.Username != "" {
+		return u.Username
+	}
+	return userID
+}
+
 // GetGatewayURL trả URL websocket của Discord gateway (REST /gateway/bot).
 func (c *Client) GetGatewayURL() (string, error) {
 	body, _, err := c.doAPI("GET", "https://discord.com/api/v10/gateway/bot")
@@ -264,25 +282,38 @@ type GuildMessage struct {
 }
 
 func (c *Client) doAPI(method, url string) ([]byte, int, error) {
+	return c.doAPIWithReason(method, url, "")
+}
+
+// newAPIRequest dựng request với header chuẩn + audit-log reason (nếu có).
+// Discord yêu cầu reason được URL-encoded trong header X-Audit-Log-Reason.
+func (c *Client) newAPIRequest(method, url, reason string) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bot "+c.Token)
 	req.Header.Set("Content-Type", "application/json")
-	// Discord API ưu tiên API-style UA (giống newRequest trong sources)
-	req.Header.Set("User-Agent", "DiscordBot (https://github.com/sang765/TMR-Discord-Bot, v1.4)")
+	req.Header.Set("User-Agent", "DiscordBot (https://github.com/sang765/TMR-Discord-Bot, v1.5)")
+	if reason != "" {
+		req.Header.Set("X-Audit-Log-Reason", strings.ReplaceAll(neturl.PathEscape(reason), "+", "%2B"))
+	}
+	return req, nil
+}
+
+func (c *Client) doAPIWithReason(method, url, reason string) ([]byte, int, error) {
+	req, err := c.newAPIRequest(method, url, reason)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	for attempt := 0; attempt < 8; attempt++ {
 		if attempt > 0 {
 			// tạo lại request vì body đã đọc ở lần trước (cần cho PUT role)
-			req, err = http.NewRequest(method, url, nil)
+			req, err = c.newAPIRequest(method, url, reason)
 			if err != nil {
 				return nil, 0, err
 			}
-			req.Header.Set("Authorization", "Bot "+c.Token)
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("User-Agent", "DiscordBot (https://github.com/sang765/TMR-Discord-Bot, v1.5)")
 		}
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
@@ -358,9 +389,9 @@ func (c *Client) ListMessages(channelID, before, after string, limit int) ([]Gui
 }
 
 // AddRole gán role cho member. Discord trả 204 No Content khi thành công.
-func (c *Client) AddRole(guildID, userID, roleID string) error {
+func (c *Client) AddRole(guildID, userID, roleID, reason string) error {
 	url := fmt.Sprintf("https://discord.com/api/v10/guilds/%s/members/%s/roles/%s", guildID, userID, roleID)
-	_, code, err := c.doAPI("PUT", url)
+	_, code, err := c.doAPIWithReason("PUT", url, reason)
 	if err != nil {
 		return err
 	}

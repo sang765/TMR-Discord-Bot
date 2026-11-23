@@ -4,6 +4,7 @@ package main
 // Chạy định kỳ bằng REST — không cần gateway intent, bot vẫn giữ REST-only.
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -108,7 +109,9 @@ func (a *app) runStreakCheck(dry bool) {
 			log.Printf("streak: [dry] cấp role %s cho user %s (chuỗi %d ngày)", a.cfg.Streak.RoleID, userID, need)
 			continue
 		}
-		if err := a.dc.AddRole(a.cfg.GuildID, userID, a.cfg.Streak.RoleID); err != nil {
+		username := a.dc.GetUsername(userID)
+		reason := fmt.Sprintf("Người dùng %s đã đạt chuỗi %d ngày liên tục. Đã cấp quyền Attach File và Embed Link.", username, need)
+		if err := a.dc.AddRole(a.cfg.GuildID, userID, a.cfg.Streak.RoleID, reason); err != nil {
 			log.Printf("streak: gán role cho %s thất bại: %v", userID, err)
 			continue
 		}
