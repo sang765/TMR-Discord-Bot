@@ -65,20 +65,33 @@ func (a *app) runGateway() {
 	}
 
 	reconnectDelay := 2 * time.Second
+	sess := &gatewaySessionState{}
 	for {
-		if err := a.gatewaySession(token, need, st, valid, exclude); err != nil {
-			log.Printf("gateway: %v — reconnect sau %s", err, reconnectDelay)
+		started := time.Now()
+		err := a.gatewaySession(token, need, st, valid, exclude, sess)
+		// Session sống đủ lâu (>= 1 phút) thì coi như ổn — reset backoff,
+		// không để nó kẹt ở 1m4s như trước.
+		if time.Since(started) >= time.Minute {
+			reconnectDelay = 2 * time.Second
+		}
+		if err != nil {
+			log.Printf("gateway: %v — reconnect sau %s (resume=%t)", err, reconnectDelay, sess.id != "")
 			time.Sleep(reconnectDelay)
-			if reconnectDelay < 60*time.Second {
+			if reconnectDelay < 30*time.Second {
 				reconnectDelay *= 2
 			}
-		} else {
-			reconnectDelay = 2 * time.Second
 		}
 	}
 }
 
-func (a *app) gatewaySession(token string, need int, st *store.StreakStore, valid, exclude map[string]bool) error {
+// gatewaySessionState giữ session_id + seq giữa các lần reconnect để RESUME —
+// nếu không, mỗi lần rớt mạng Android là mất toàn bộ sự kiện trong lúc offline.
+type gatewaySessionState struct {
+	id  string
+	seq int
+}
+
+func (a *app) gatewaySession(token string, need int, st *store.StreakStore, valid, exclude map[string]bool, sess *gatewaySessionState) error {
 	gw, err := a.dc.GetGatewayURL()
 	if err != nil {
 		return err
@@ -88,12 +101,15 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 		return err
 	}
 	defer ws.Close()
-	if err := ws.SendText(discord.IdentifyPayload(token, gatewayIntents)); err != nil {
+	if sess.id != "" && sess.seq > 0 {
+		log.Printf("gateway: RESUME session=%s seq=%d", sess.id, sess.seq)
+		if err := ws.SendText(discord.ResumePayload(token, sess.id, sess.seq)); err != nil {
+			return err
+		}
+	} else if err := ws.SendText(discord.IdentifyPayload(token, gatewayIntents)); err != nil {
 		return err
 	}
 
-	sessionID := ""
-	seq := 0
 	// Mặc định 41s; sẽ đổi theo heartbeat_interval thật từ HELLO.
 	heartbeatInterval := 41 * time.Second
 	heartbeat := time.NewTicker(heartbeatInterval)
@@ -105,7 +121,7 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 		ws.SetDeadline(time.Now().Add(35 * time.Second))
 		select {
 		case <-heartbeat.C:
-			payload, _ := json.Marshal(map[string]any{"op": 1, "d": seq})
+			payload, _ := json.Marshal(map[string]any{"op": 1, "d": sess.seq})
 			if err := ws.SendText(payload); err != nil {
 				return err
 			}
@@ -125,12 +141,18 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 				continue
 			}
 			if ev.S > 0 {
-				seq = ev.S
+				sess.seq = ev.S
 			}
 			switch ev.Op {
 			case 1: // gateway yêu cầu heartbeat ngay
-				payload, _ := json.Marshal(map[string]any{"op": 1, "d": seq})
+				payload, _ := json.Marshal(map[string]any{"op": 1, "d": sess.seq})
 				if err := ws.SendText(payload); err != nil {
+					return err
+				}
+			case 9: // Invalid Session — session hết hạn, reset rồi IDENTIFY lại
+				sess.id, sess.seq = "", 0
+				log.Printf("gateway: invalid session — identify lại")
+				if err := ws.SendText(discord.IdentifyPayload(token, gatewayIntents)); err != nil {
 					return err
 				}
 			case 10: // Hello — đọc heartbeat_interval rồi reset ticker
@@ -145,17 +167,19 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 					log.Printf("gateway: HELLO heartbeat=%s", iv)
 				}
 				// Gửi heartbeat ngay sau Hello (Discord yêu cầu)
-				payload, _ := json.Marshal(map[string]any{"op": 1, "d": seq})
+				payload, _ := json.Marshal(map[string]any{"op": 1, "d": sess.seq})
 				_ = ws.SendText(payload)
 			case 0:
 				switch ev.T {
+				case "RESUMED":
+					log.Printf("gateway: RESUMED thành công session=%s seq=%d", sess.id, sess.seq)
 				case "READY":
 					var d struct {
 						SessionID string `json:"session_id"`
 					}
 					_ = json.Unmarshal(ev.D, &d)
-					sessionID = d.SessionID
-					log.Printf("gateway: READY session=%s intents=%d", sessionID, gatewayIntents)
+					sess.id = d.SessionID
+					log.Printf("gateway: READY session=%s intents=%d", sess.id, gatewayIntents)
 				case "MESSAGE_CREATE":
 					var m RealtimeMessage
 					if err := json.Unmarshal(ev.D, &m); err != nil {
