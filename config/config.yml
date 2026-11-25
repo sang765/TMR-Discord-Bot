@@ -12,8 +12,8 @@ channels:
   manga_chap: "1490326845193719879"  # 💭 chap-manga-mới
   manga_new: "1490326204874494113"   # 📰 new-manga
 
-# Lịch poll (phút)
-poll_interval_min: 15
+# Lịch poll (phút) — 5p vẫn an toàn: ~6 req/poll, DocLn có limiter 600ms + retry 429
+poll_interval_min: 5
 
 # Chỉ thông báo mục đăng trong vòng N giờ gần nhất (tránh spam mục cũ)
 max_age_hours: 72
