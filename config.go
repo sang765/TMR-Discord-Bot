@@ -43,12 +43,14 @@ type Config struct {
 	DocLnPages int `yaml:"docln_pages"`
 	// MangaDex feed size (default 50).
 	MangaDexLimit int `yaml:"mangadex_limit"`
-	// DocLn group id (default 3474).
-	DocLnGroupID string `yaml:"docln_group_id"`
-	// Moe team path (default /team/256/the-mavericks).
-	MoeTeamPath string `yaml:"moe_team_path"`
-	// CuuTruyen team id (default +695).
-	CuuTruyenTeamID string `yaml:"cuutruyen_team_id"`
+	// DocLn group ids (default 3474).
+	DocLnGroupIDs []string `yaml:"docln_group_ids"`
+	// MangaDex group ids (default The Mavericks).
+	MangaDexGroupIDs []string `yaml:"mangadex_group_ids"`
+	// Moe team paths (default /team/256/the-mavericks).
+	MoeTeamPaths []string `yaml:"moe_team_paths"`
+	// CuuTruyen team ids (default +695).
+	CuuTruyenTeamIDs []string `yaml:"cuutruyen_team_ids"`
 	// CuuTruyen: skip direct fetch, always use r.jina.ai fallback.
 	CuuTruyenJina bool `yaml:"cuutruyen_jina"`
 
@@ -93,9 +95,10 @@ func LoadConfig(path string) (*Config, error) {
 		MergeLinks:      true,
 		DocLnPages:      2,
 		MangaDexLimit:   50,
-		DocLnGroupID:    "3474",
-		MoeTeamPath:     "/team/256/the-mavericks",
-		CuuTruyenTeamID: "+695",
+		DocLnGroupIDs:   []string{"3474"},
+		MangaDexGroupIDs: []string{"1a653584-126f-4775-9af8-e06e250ad829"},
+		MoeTeamPaths:    []string{"/team/256/the-mavericks"},
+		CuuTruyenTeamIDs: []string{"+695"},
 		CuuTruyenBase:   "https://cuutruyen.net",
 		DocLnBase:       "https://docln.sbs",
 		MoeBase:         "https://truyen.moe",

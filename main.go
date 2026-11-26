@@ -140,27 +140,34 @@ func runCheck(cfgPath string) int {
 func buildFetchers(cfg *Config) []sources.Fetcher {
 	var f []sources.Fetcher
 	if cfg.EnableDocLn {
-		f = append(f, &sources.DocLn{
-			Base: cfg.DocLnBase, GroupID: cfg.DocLnGroupID,
-			Pages: cfg.DocLnPages, Store: sharedStore{},
-		})
+		for _, gid := range cfg.DocLnGroupIDs {
+			f = append(f, &sources.DocLn{
+				Base: cfg.DocLnBase, GroupID: gid,
+				Pages: cfg.DocLnPages, Store: sharedStore{},
+			})
+		}
 	}
 	if cfg.EnableMangaDex {
-		f = append(f, &sources.MangaDex{
-			GroupID: "1a653584-126f-4775-9af8-e06e250ad829",
-			Limit:   cfg.MangaDexLimit, Store: sharedStore{},
-		})
+		for _, gid := range cfg.MangaDexGroupIDs {
+			f = append(f, &sources.MangaDex{
+				GroupID: gid, Limit: cfg.MangaDexLimit, Store: sharedStore{},
+			})
+		}
 	}
 	if cfg.EnableMoe {
-		f = append(f, &sources.Moe{
-			Base: cfg.MoeBase, TeamPath: cfg.MoeTeamPath, Store: sharedStore{},
-		})
+		for _, tp := range cfg.MoeTeamPaths {
+			f = append(f, &sources.Moe{
+				Base: cfg.MoeBase, TeamPath: tp, Store: sharedStore{},
+			})
+		}
 	}
 	if cfg.EnableCuuTruyen {
-		f = append(f, &sources.CuuTruyen{
-			Base: cfg.CuuTruyenBase, TeamID: cfg.CuuTruyenTeamID,
-			Store: sharedStore{}, UseJina: cfg.CuuTruyenJina,
-		})
+		for _, tid := range cfg.CuuTruyenTeamIDs {
+			f = append(f, &sources.CuuTruyen{
+				Base: cfg.CuuTruyenBase, TeamID: tid,
+				Store: sharedStore{}, UseJina: cfg.CuuTruyenJina,
+			})
+		}
 	}
 	return f
 }

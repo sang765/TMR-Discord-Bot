@@ -30,13 +30,20 @@ enable_cuutruyen: true
 
 # Chi tiết nguồn (thường không cần sửa)
 docln_base: "https://docln.sbs"    # đổi thành docln.net / ln.hako.vn nếu cần
-docln_group_id: "3474"
+docln_group_ids:
+  - "3474"
 docln_pages: 2
 mangadex_limit: 50
+mangadex_group_ids:
+  - "1a653584-126f-4775-9af8-e06e250ad829"   # The Mavericks
+  - "9759e8b8-c76a-4d1e-b672-c88e9d5f67e6"   # Exist In This World
 moe_base: "https://truyen.moe"
-moe_team_path: "/team/256/the-mavericks"
+moe_team_paths:
+  - "/team/256/the-mavericks"   # The Mavericks
+  - "/team/74/exist-in-this-world"   # Exist In This World
 cuutruyen_base: "https://cuutruyen.net"  # đổi thành mirror nếu bị chặn
-cuutruyen_team_id: "+695"
+cuutruyen_team_ids:
+  - "+695"
 cuutruyen_jina: false              # true = luôn lấy qua r.jina.ai
 
 # Bot báo online/lỗi vào kênh status
