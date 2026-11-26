@@ -32,6 +32,8 @@ type mdChapter struct {
 		Attributes *struct {
 			Title     map[string]string   `json:"title"`
 			AltTitles []map[string]string `json:"altTitles"`
+			Desc      json.RawMessage     `json:"description"` // map (manga) hoặc string (group)
+			Name      string              `json:"name"`        // scanlation_group
 		} `json:"attributes"`
 	} `json:"relationships"`
 }
@@ -93,7 +95,8 @@ func (m *MangaDex) apiURL() string {
 	q.Set("limit", fmt.Sprint(limit))
 	q.Set("order[readableAt]", "desc")
 	q.Set("includes[]", "manga")
-	q.Add("includes[]", "cover_art") // cần để có fileName dựng ảnh bìa
+	q.Add("includes[]", "cover_art")        // cần để có fileName dựng ảnh bìa
+	q.Add("includes[]", "scanlation_group") // cần để hiện collab (nhóm dịch khác)
 	for _, l := range langs {
 		q.Add("translatedLanguage[]", l)
 	}
@@ -131,13 +134,27 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 		var mangaAttrs *struct {
 			Title     map[string]string   `json:"title"`
 			AltTitles []map[string]string `json:"altTitles"`
+			Desc      json.RawMessage     `json:"description"`
+			Name      string              `json:"name"`
 		}
 		var coverFile string
+		var groups []TranslationTeam
+		var desc string
 		for _, rel := range ch.Relationships {
 			switch rel.Type {
 			case "manga":
 				mangaID = rel.ID
 				mangaAttrs = rel.Attributes
+				if rel.Attributes != nil {
+					desc = mdDescription(rel.Attributes.Desc)
+				}
+			case "scanlation_group":
+				if rel.Attributes != nil && rel.Attributes.Name != "" && rel.ID != m.GroupID {
+					groups = append(groups, TranslationTeam{
+						Name: rel.Attributes.Name,
+						URL:  "https://mangadex.org/group/" + rel.ID,
+					})
+				}
 			case "cover_art":
 				type coverAttr struct {
 					FileName string `json:"fileName"`
@@ -181,9 +198,11 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 				items = append(items, Item{
 					Source: "mangadex", Kind: KindNewSeries,
 					Title: title, URL: "https://mangadex.org/title/" + mangaID,
-					CoverURL:  cover,
-					Chapter:   chLabel,
-					Published: ch.Attributes.ReadableAt,
+					CoverURL:    cover,
+					Chapter:     chLabel,
+					Description: desc,
+					Collabs:     groups,
+					Published:   ch.Attributes.ReadableAt,
 				})
 			}
 			continue
@@ -204,4 +223,24 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 	}
 	sort.SliceStable(items, func(a, b int) bool { return items[a].Published.Before(items[b].Published) })
 	return items, nil
+}
+
+// mdDescription xử lý field description của MangaDex: manga trả map[lang]text,
+// scanlation_group trả string. Chỉ lấy vi rồi en.
+func mdDescription(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var m map[string]string
+	if err := json.Unmarshal(raw, &m); err == nil {
+		if v := m["vi"]; v != "" {
+			return StripTags(v)
+		}
+		return StripTags(m["en"])
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return StripTags(s)
+	}
+	return ""
 }

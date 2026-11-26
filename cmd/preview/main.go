@@ -1,0 +1,58 @@
+// Command preview dựng payload mẫu cho card "truyện mới" theo mẫu mới của Sáng,
+// in JSON ra stdout để curl gửi thử. Không ping role (allowed_mentions.parse=[]).
+// Chạy: go run ./cmd/preview
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"tmr-bot/discord"
+)
+
+func preview(source, title, desc, url, cover string, color int, collabs []string) discord.Message {
+	src := map[string]string{"docln": "DocLn", "mangadex": "MangaDex", "moe": "Mòe Truyện", "cuutruyen": "Cứu Truyện"}[source]
+	text := "# Truyện mới đã cập bến rồi đây\n" +
+		"**🏷️ Tên:** " + title + "\n" +
+		"**📃 Mô tả:**\n" + desc
+	if len(collabs) > 0 {
+		text += "\n\n**🤝 Collab với:**\n"
+		for _, c := range collabs {
+			text += "- [**" + c + "**](https://truyen.moe/team/0/" + c + ")\n"
+		}
+	}
+	text = text + "\n<@&1424440045116330204>"
+
+	inner := []discord.Component{
+		{Type: discord.CompTextDisplay, Content: text},
+		{Type: discord.CompMediaGallery, Items: []discord.MediaItem{{Media: discord.MediaSource{URL: cover}}}},
+		{Type: discord.CompActionRow, Components: []discord.Component{{
+			Type: discord.CompButton, Style: discord.ButtonStyleLink,
+			Label: "Đọc tại " + src, URL: url,
+		}}},
+		{Type: discord.CompTextDisplay, Content: "-# The Mavericks | " + src + " | " + time.Now().In(time.FixedZone("+07", 7*3600)).Format("02/01 15:04")},
+	}
+	return discord.Message{
+		Flags:           discord.FlagComponentsV2,
+		AllowedMentions: &discord.AllowedMentions{Parse: []string{}},
+		Components:      []discord.Component{{Type: discord.CompContainer, AccentColor: color, Components: inner}},
+	}
+}
+
+func main() {
+	const cover = "https://u.truyen.moe/uploads/covers/1758-co-hoc-tro-cu-ninose-md.webp"
+	items := []struct {
+		name, source, title, desc, url string
+		color                          int
+		collabs                        []string
+	}{
+		{"NOVEL MỚI", "docln", "Ví Dụ Novel Mới — Bản Xem Thử", "Một bộ light novel về những cuộc gặp gỡ bất ngờ và hành trình tìm lại ký ức bị lãng quên.", "https://docln.sbs/truyen/9999-example-novel", 0x7C3AED, nil},
+		{"MANGA MỚI + COLLAB", "moe", "Digimon Eggs", "Cuộc phiêu lưu của những quả trứng Digimon bí ẩn tại thế giới kỹ thuật số.", "https://truyen.moe/manga/2808-digimon-eggs", 0xF39C12, []string{"Tạp kỹ Helikopter"}},
+	}
+	for _, it := range items {
+		b, _ := json.Marshal(preview(it.source, it.title, it.desc, it.url, cover, it.color, it.collabs))
+		fmt.Println("### " + it.name)
+		fmt.Println(string(b))
+	}
+}

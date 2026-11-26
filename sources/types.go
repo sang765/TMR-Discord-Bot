@@ -23,14 +23,25 @@ const (
 
 // Item is one scraped update from any source.
 type Item struct {
-	Source    string // "docln", "mangadex", "moe", "cuutruyen"
-	Kind      Kind
-	Title     string // series title
-	Chapter   string // chapter label e.g. "Chương 58" / "Ch. 5" (empty for new series)
-	URL       string // link to the chapter or series
-	CoverURL  string // optional cover image
-	Subtitle  string // optional extra text (chapter title, team note...)
+	Source   string // "docln", "mangadex", "moe", "cuutruyen"
+	Kind     Kind
+	Title    string // series title
+	Chapter  string // chapter label e.g. "Chương 58" / "Ch. 5" (empty for new series)
+	URL      string // link to the chapter or series
+	CoverURL string // optional cover image
+	Subtitle string // optional extra text (chapter title, team note...)
+
+	// New-series card: mô tả bộ truyện + các nhóm dịch cùng làm (collab).
+	Description string            `json:"description,omitempty"`
+	Collabs     []TranslationTeam `json:"collabs,omitempty"` // không tính nhóm mình
+
 	Published time.Time
+}
+
+// TranslationTeam là một nhóm dịch khác cùng làm bộ truyện (collab).
+type TranslationTeam struct {
+	Name string
+	URL  string
 }
 
 // Fetcher is implemented by each source.

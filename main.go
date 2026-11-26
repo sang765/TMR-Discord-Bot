@@ -551,14 +551,20 @@ var sourceColors = map[string]int{
 
 // buildMessage renders a Components V2 message (embed V2):
 //
-//	┌─ Container (viền màu theo nguồn) ────────────┐
-//	│ @role                                        │
-//	│ # Tên truyện                                 │
-//	│ Đã upload **Chương 2 — ...**                 │
-//	│ [ảnh bìa lớn]                                │
-//	│ [Đọc tại Mòe Truyện]  (nút link)             │
-//	│ -# The Mavericks • Mòe Truyện • 20/11 11:38  │
-//	└──────────────────────────────────────────────┘
+// buildMessage dựng card Components V2.
+//
+// Chapter mới (giữ mẫu cũ):
+//
+//	│ @role / # Tên / Đã upload Chương N / [bìa] / nút Đọc tại / footer
+//
+// Truyện mới (mẫu mới theo Sáng):
+//
+//	│ # Truyện mới đã cập bến rồi đây
+//	│ **🏷️ Tên:** ...
+//	│ **📃 Mô tả:** ...
+//	│ **🤝 Collab với:** (nếu có) — [Nhóm](link)
+//	│ @role
+//	│ [bìa] / nút Đọc tại / The Mavericks | timestamp
 func buildMessage(roleID string, it sources.Item) discord.Message {
 	src := sourceNames[it.Source]
 	color := sourceColors[it.Source]
@@ -566,11 +572,27 @@ func buildMessage(roleID string, it sources.Item) discord.Message {
 
 	var head string
 	if it.Kind == sources.KindNewSeries {
-		head = "📚 **Truyện mới!**"
+		head = "# Truyện mới đã cập bến rồi đây\n" +
+			"**🏷️ Tên:** " + it.Title + "\n" +
+			"**📃 Mô tả:**\n" + Truncate(it.Description, 400)
+		if len(it.Collabs) > 0 {
+			var b strings.Builder
+			b.WriteString("**🤝 Collab với:**\n")
+			for _, t := range it.Collabs {
+				b.WriteString("- [**" + t.Name + "**](" + t.URL + ")\n")
+			}
+			head += strings.TrimRight(b.String(), "\n")
+		}
 	} else {
-		head = "Đã upload **" + it.Chapter + "**"
+		head = "# " + it.Title + "\nĐã upload **" + it.Chapter + "**"
 	}
-	text := joinNonEmpty("\n", role, "# "+it.Title, head, Truncate(it.Subtitle, 200))
+	text := joinNonEmpty("\n", head, Truncate(it.Subtitle, 200))
+	// Mention đặt CUỐI phần text (theo mẫu); chapter cũ vẫn để đầu cho quen.
+	if it.Kind == sources.KindNewSeries {
+		text = joinNonEmpty("\n", text, role)
+	} else {
+		text = joinNonEmpty("\n", role, text)
+	}
 
 	inner := []discord.Component{
 		{Type: discord.CompTextDisplay, Content: text},
@@ -601,9 +623,13 @@ func buildMessage(roleID string, it sources.Item) discord.Message {
 }
 
 func footerLine(src string, it sources.Item) string {
-	line := "-# The Mavericks • " + src
+	sep := " • "
+	if it.Kind == sources.KindNewSeries {
+		sep = " | " // mẫu mới: The Mavericks | timestamp
+	}
+	line := "-# The Mavericks" + sep + src
 	if !it.Published.IsZero() {
-		line += " • " + it.Published.In(tzVN).Format("02/01 15:04")
+		line += sep + it.Published.In(tzVN).Format("02/01 15:04")
 	}
 	return line
 }

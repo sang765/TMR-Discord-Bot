@@ -53,35 +53,71 @@ func chapToManga(path string) string {
 	return path
 }
 
-// moeCover lấy URL ảnh bìa từ trang manga (og:image). Panel "Hoạt động gần đây"
-// không có ảnh, nên phải fetch thêm 1 request cho mỗi truyện có cập nhật mới.
+// mangaMeta lấy từ trang manga: ảnh bìa (og:image), mô tả (og:description) và
+// các nhóm dịch khác (translator cards). Panel "Hoạt động gần đây" không có
+// mấy thứ này nên phải fetch thêm 1 request cho mỗi truyện có cập nhật mới.
 // og:image thường có dạng CDN#media-fallback=<url thật> — ưu tiên fallback vì
 // Discord MediaGallery không xử lý fragment '#' tốt.
-var moeOgRe = regexp.MustCompile(`(?s)<meta[^>]+(?:og:image|twitter:image)[^>]+content="([^"]+)"`)
-var moeFallbackRe = regexp.MustCompile(`[#&]media-fallback=([^"&]+)`)
+var (
+	moeOgRe       = regexp.MustCompile(`(?s)<meta[^>]+(?:og:image|twitter:image)[^>]+content="([^"]+)"`)
+	moeDescRe     = regexp.MustCompile(`(?s)<meta[^>]+(?:og:description|name="description")[^>]+content="([^"]+)"`)
+	moeFallbackRe = regexp.MustCompile(`[#&]media-fallback=([^"&]+)`)
+	moeTeamCardRe = regexp.MustCompile(`(?s)<article class="[^"]*manga-translation-team-card[^"]*"[^>]*>(.*?)</article>`)
+	moeTeamNameRe = regexp.MustCompile(`class="[^"]*manga-translation-team-card__title[^"]*"[^>]*title="([^"]+)"`)
+	moeTeamLinkRe = regexp.MustCompile(`href="(/team/\d+[^"]*)"`)
+)
 
-func (m *Moe) cover(mangaPath string) string {
+type mangaMeta struct {
+	Cover  string
+	Desc   string
+	Collab []TranslationTeam
+}
+
+func (m *Moe) mangaInfo(mangaPath string) mangaMeta {
+	var out mangaMeta
 	page := strings.TrimRight(m.Base, "/") + mangaPath
 	req, err := newBrowserRequest("GET", page)
 	if err != nil {
-		return ""
+		return out
 	}
 	body, code, err := doRequest(req)
 	if err != nil || code != 200 {
-		return ""
+		return out
 	}
-	mg := moeOgRe.FindStringSubmatch(body)
-	if len(mg) < 2 {
-		return ""
-	}
-	img := mg[1]
-	if f := moeFallbackRe.FindStringSubmatch(img); len(f) >= 2 {
-		if decoded, err := url.QueryUnescape(f[1]); err == nil {
-			return decoded
+	if mg := moeOgRe.FindStringSubmatch(body); len(mg) >= 2 {
+		img := mg[1]
+		if f := moeFallbackRe.FindStringSubmatch(img); len(f) >= 2 {
+			if decoded, err := url.QueryUnescape(f[1]); err == nil {
+				img = decoded
+			} else {
+				img = f[1]
+			}
 		}
-		return f[1]
+		out.Cover = img
 	}
-	return img
+	if d := moeDescRe.FindStringSubmatch(body); len(d) >= 2 {
+		out.Desc = strings.TrimSpace(StripTags(d[1]))
+	}
+	// Loại nhóm của mình (theo TeamPath) khỏi danh sách collab.
+	selfPath := strings.TrimRight(m.TeamPath, "/")
+	for _, card := range moeTeamCardRe.FindAllStringSubmatch(body, -1) {
+		name := ""
+		if n := moeTeamNameRe.FindStringSubmatch(card[1]); len(n) >= 2 {
+			name = n[1]
+		}
+		link := ""
+		if l := moeTeamLinkRe.FindStringSubmatch(card[1]); len(l) >= 2 {
+			link = AbsoluteURL(m.Base, l[1])
+		}
+		if name == "" || link == "" {
+			continue
+		}
+		if strings.HasSuffix(link, selfPath) || strings.HasSuffix(selfPath, strings.TrimPrefix(link, m.Base)) {
+			continue // chính nhóm mình — không hiện trong collab
+		}
+		out.Collab = append(out.Collab, TranslationTeam{Name: name, URL: link})
+	}
+	return out
 }
 
 // Fetch implements Fetcher.
@@ -119,14 +155,14 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 	now := time.Now()
 	var items []Item
 	emitted := map[string]bool{}
-	coverCache := map[string]string{}
-	coverOf := func(path string) string {
-		if c, ok := coverCache[path]; ok {
-			return c
+	metaCache := map[string]mangaMeta{}
+	metaOf := func(path string) mangaMeta {
+		if v, ok := metaCache[path]; ok {
+			return v
 		}
-		c := m.cover(path)
-		coverCache[path] = c
-		return c
+		v := m.mangaInfo(path)
+		metaCache[path] = v
+		return v
 	}
 
 	for _, it := range parsed {
@@ -141,11 +177,14 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 			if seed {
 				continue
 			}
+			meta := metaOf(it.mangaPath)
 			items = append(items, Item{
 				Source: "moe", Kind: KindNewSeries,
-				Title:    it.title,
-				URL:      AbsoluteURL(m.Base, it.mangaPath),
-				CoverURL: coverOf(it.mangaPath),
+				Title:       it.title,
+				URL:         AbsoluteURL(m.Base, it.mangaPath),
+				CoverURL:    meta.Cover,
+				Description: meta.Desc,
+				Collabs:     meta.Collab,
 				Chapter: func() string {
 					if strings.HasPrefix(it.chapLabel, "Ch ") {
 						return "Chương " + strings.TrimSpace(strings.TrimPrefix(it.chapLabel, "Ch "))
@@ -172,7 +211,7 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 			Source: "moe", Kind: KindChapter,
 			Title: it.title, Chapter: label,
 			URL:       AbsoluteURL(m.Base, it.chapPath),
-			CoverURL:  coverOf(it.mangaPath),
+			CoverURL:  metaOf(it.mangaPath).Cover,
 			Published: pub,
 		})
 	}
