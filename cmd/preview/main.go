@@ -28,7 +28,7 @@ func preview(source, title, desc, url, cover string, color int, genres, collabs 
 		text += "\n\n**🤝 Collab với:**\n"
 		for _, c := range collabs {
 			name, link, _ := strings.Cut(c, "|")
-			text += "- [**" + name + "](" + link + ")\n"
+			text += "- **[" + name + "](" + link + ")**\n"
 		}
 	}
 	text = text + "\n<@&1424440045116330204>"

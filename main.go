@@ -586,7 +586,7 @@ func buildMessage(roleID string, it sources.Item) discord.Message {
 			var b strings.Builder
 			b.WriteString("**🤝 Collab với:**\n")
 			for _, t := range it.Collabs {
-				b.WriteString("- [**" + t.Name + "**](" + t.URL + ")\n")
+				b.WriteString("- **[" + t.Name + "](" + t.URL + ")**\n")
 			}
 			head += strings.TrimRight(b.String(), "\n")
 		}
