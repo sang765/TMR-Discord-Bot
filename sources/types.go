@@ -33,6 +33,7 @@ type Item struct {
 
 	// New-series card: mô tả bộ truyện + các nhóm dịch cùng làm (collab).
 	Description string            `json:"description,omitempty"`
+	Genres      []string          `json:"genres,omitempty"` // thể loại / tag
 	Collabs     []TranslationTeam `json:"collabs,omitempty"` // không tính nhóm mình
 
 	Published time.Time

@@ -6,16 +6,24 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"tmr-bot/discord"
 )
 
-func preview(source, title, desc, url, cover string, color int, collabs []string) discord.Message {
+func preview(source, title, desc, url, cover string, color int, genres, collabs []string) discord.Message {
 	src := map[string]string{"docln": "DocLn", "mangadex": "MangaDex", "moe": "Mòe Truyện", "cuutruyen": "Cứu Truyện"}[source]
 	text := "# Truyện mới đã cập bến rồi đây\n" +
 		"**🏷️ Tên:** " + title + "\n" +
 		"**📃 Mô tả:**\n" + desc
+	if len(genres) > 0 {
+		tags := make([]string, 0, len(genres))
+		for _, g := range genres {
+			tags = append(tags, "`"+g+"`")
+		}
+		text += "\n**📋 Thể loại:**\n" + strings.Join(tags, ", ")
+	}
 	if len(collabs) > 0 {
 		text += "\n\n**🤝 Collab với:**\n"
 		for _, c := range collabs {
@@ -45,13 +53,13 @@ func main() {
 	items := []struct {
 		name, source, title, desc, url string
 		color                          int
-		collabs                        []string
+		genres, collabs                []string
 	}{
-		{"NOVEL MỚI", "docln", "Ví Dụ Novel Mới — Bản Xem Thử", "Một bộ light novel về những cuộc gặp gỡ bất ngờ và hành trình tìm lại ký ức bị lãng quên.", "https://docln.sbs/truyen/9999-example-novel", 0x7C3AED, nil},
-		{"MANGA MỚI + COLLAB", "moe", "Digimon Eggs", "Cuộc phiêu lưu của những quả trứng Digimon bí ẩn tại thế giới kỹ thuật số.", "https://truyen.moe/manga/2808-digimon-eggs", 0xF39C12, []string{"Tạp kỹ Helikopter"}},
+		{"NOVEL MỚI", "docln", "Ví Dụ Novel Mới — Bản Xem Thử", "Một bộ light novel về những cuộc gặp gỡ bất ngờ và hành trình tìm lại ký ức bị lãng quên.", "https://docln.sbs/truyen/9999-example-novel", 0x7C3AED, []string{"Romance", "School", "Comedy"}, nil},
+		{"MANGA MỚI + COLLAB", "moe", "Digimon Eggs", "Cuộc phiêu lưu của những quả trứng Digimon bí ẩn tại thế giới kỹ thuật số.", "https://truyen.moe/manga/2808-digimon-eggs", 0xF39C12, []string{"Action", "Adventure", "Fantasy"}, []string{"Tạp kỹ Helikopter"}},
 	}
 	for _, it := range items {
-		b, _ := json.Marshal(preview(it.source, it.title, it.desc, it.url, cover, it.color, it.collabs))
+		b, _ := json.Marshal(preview(it.source, it.title, it.desc, it.url, cover, it.color, it.genres, it.collabs))
 		fmt.Println("### " + it.name)
 		fmt.Println(string(b))
 	}

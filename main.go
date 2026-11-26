@@ -575,6 +575,13 @@ func buildMessage(roleID string, it sources.Item) discord.Message {
 		head = "# Truyện mới đã cập bến rồi đây\n" +
 			"**🏷️ Tên:** " + it.Title + "\n" +
 			"**📃 Mô tả:**\n" + Truncate(it.Description, 400)
+		if len(it.Genres) > 0 {
+			tags := make([]string, 0, len(it.Genres))
+			for _, g := range it.Genres {
+				tags = append(tags, "`"+g+"`")
+			}
+			head += "\n**📋 Thể loại:**\n" + strings.Join(tags, ", ")
+		}
 		if len(it.Collabs) > 0 {
 			var b strings.Builder
 			b.WriteString("**🤝 Collab với:**\n")

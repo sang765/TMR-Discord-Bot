@@ -33,7 +33,8 @@ type mdChapter struct {
 			Title     map[string]string   `json:"title"`
 			AltTitles []map[string]string `json:"altTitles"`
 			Desc      json.RawMessage     `json:"description"` // map (manga) hoặc string (group)
-			Name      string              `json:"name"`        // scanlation_group
+			Tags      json.RawMessage     `json:"tags"`        // manga: []tag
+			Name      json.RawMessage     `json:"name"`        // string (group) hoặc map (tag)
 		} `json:"attributes"`
 	} `json:"relationships"`
 }
@@ -135,11 +136,13 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 			Title     map[string]string   `json:"title"`
 			AltTitles []map[string]string `json:"altTitles"`
 			Desc      json.RawMessage     `json:"description"`
-			Name      string              `json:"name"`
+			Tags      json.RawMessage     `json:"tags"`
+			Name      json.RawMessage     `json:"name"`
 		}
 		var coverFile string
 		var groups []TranslationTeam
 		var desc string
+		var genres []string
 		for _, rel := range ch.Relationships {
 			switch rel.Type {
 			case "manga":
@@ -147,11 +150,16 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 				mangaAttrs = rel.Attributes
 				if rel.Attributes != nil {
 					desc = mdDescription(rel.Attributes.Desc)
+					genres = append(genres, mdTags(rel.Attributes.Tags)...)
 				}
 			case "scanlation_group":
-				if rel.Attributes != nil && rel.Attributes.Name != "" && rel.ID != m.GroupID {
+				if rel.Attributes != nil && rel.ID != m.GroupID {
+					gname := mdName(rel.Attributes.Name)
+					if gname == "" {
+						continue
+					}
 					groups = append(groups, TranslationTeam{
-						Name: rel.Attributes.Name,
+						Name: gname,
 						URL:  "https://mangadex.org/group/" + rel.ID,
 					})
 				}
@@ -201,6 +209,7 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 					CoverURL:    cover,
 					Chapter:     chLabel,
 					Description: desc,
+					Genres:      genres,
 					Collabs:     groups,
 					Published:   ch.Attributes.ReadableAt,
 				})
@@ -243,4 +252,47 @@ func mdDescription(raw json.RawMessage) string {
 		return StripTags(s)
 	}
 	return ""
+}
+
+// mdName xử lý field name: string cho scanlation_group, map[lang]string cho tag.
+func mdName(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var m map[string]string
+	if json.Unmarshal(raw, &m) == nil {
+		if v := m["vi"]; v != "" {
+			return v
+		}
+		return m["en"]
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return ""
+}
+
+// mdTags parse manga.attributes.tags — mỗi tag có attributes.name map[lang]string.
+func mdTags(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var tags []struct {
+		Attributes struct {
+			Name map[string]string `json:"name"`
+		} `json:"attributes"`
+	}
+	if json.Unmarshal(raw, &tags) != nil {
+		return nil
+	}
+	var out []string
+	for _, t := range tags {
+		if v := t.Attributes.Name["vi"]; v != "" {
+			out = append(out, v)
+		} else if v := t.Attributes.Name["en"]; v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

@@ -65,11 +65,13 @@ var (
 	moeTeamCardRe = regexp.MustCompile(`(?s)<article class="[^"]*manga-translation-team-card[^"]*"[^>]*>(.*?)</article>`)
 	moeTeamNameRe = regexp.MustCompile(`class="[^"]*manga-translation-team-card__title[^"]*"[^>]*title="([^"]+)"`)
 	moeTeamLinkRe = regexp.MustCompile(`href="(/team/\d+[^"]*)"`)
+	moeGenreRe    = regexp.MustCompile(`"genre":\s*\[([^\]]*)\]`)
 )
 
 type mangaMeta struct {
 	Cover  string
 	Desc   string
+	Genres []string
 	Collab []TranslationTeam
 }
 
@@ -97,6 +99,14 @@ func (m *Moe) mangaInfo(mangaPath string) mangaMeta {
 	}
 	if d := moeDescRe.FindStringSubmatch(body); len(d) >= 2 {
 		out.Desc = strings.TrimSpace(StripTags(d[1]))
+	}
+	if g := moeGenreRe.FindStringSubmatch(body); len(g) >= 2 {
+		for _, raw := range strings.Split(g[1], ",") {
+			tag := strings.Trim(strings.TrimSpace(raw), `"'`)
+			if tag != "" {
+				out.Genres = append(out.Genres, tag)
+			}
+		}
 	}
 	// Loại nhóm của mình (theo TeamPath) khỏi danh sách collab.
 	selfPath := strings.TrimRight(m.TeamPath, "/")
@@ -184,6 +194,7 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 				URL:         AbsoluteURL(m.Base, it.mangaPath),
 				CoverURL:    meta.Cover,
 				Description: meta.Desc,
+				Genres:      meta.Genres,
 				Collabs:     meta.Collab,
 				Chapter: func() string {
 					if strings.HasPrefix(it.chapLabel, "Ch ") {
