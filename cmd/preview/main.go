@@ -27,7 +27,8 @@ func preview(source, title, desc, url, cover string, color int, genres, collabs 
 	if len(collabs) > 0 {
 		text += "\n\n**🤝 Collab với:**\n"
 		for _, c := range collabs {
-			text += "- [**" + c + "**](https://truyen.moe/team/0/" + c + ")\n"
+			name, link, _ := strings.Cut(c, "|")
+			text += "- [**" + name + "](" + link + ")\n"
 		}
 	}
 	text = text + "\n<@&1424440045116330204>"
@@ -49,14 +50,14 @@ func preview(source, title, desc, url, cover string, color int, genres, collabs 
 }
 
 func main() {
-	const cover = "https://u.truyen.moe/uploads/covers/1758-co-hoc-tro-cu-ninose-md.webp"
+	const cover = "https://u.truyen.moe/uploads/covers/2808-digimon-eggs-md.webp?t=2986a8b0ff2cc479db220d70d1efbe2446adeac16ed0835c06b8b50000aa19e9"
 	items := []struct {
 		name, source, title, desc, url string
 		color                          int
 		genres, collabs                []string
 	}{
 		{"NOVEL MỚI", "docln", "Ví Dụ Novel Mới — Bản Xem Thử", "Một bộ light novel về những cuộc gặp gỡ bất ngờ và hành trình tìm lại ký ức bị lãng quên.", "https://docln.sbs/truyen/9999-example-novel", 0x7C3AED, []string{"Romance", "School", "Comedy"}, nil},
-		{"MANGA MỚI + COLLAB", "moe", "Digimon Eggs", "Cuộc phiêu lưu của những quả trứng Digimon bí ẩn tại thế giới kỹ thuật số.", "https://truyen.moe/manga/2808-digimon-eggs", 0xF39C12, []string{"Action", "Adventure", "Fantasy"}, []string{"Tạp kỹ Helikopter"}},
+		{"MANGA MỚI + COLLAB", "moe", "Digimon Eggs", "Cuộc phiêu lưu của những quả trứng Digimon bí ẩn tại thế giới kỹ thuật số.", "https://truyen.moe/manga/2808-digimon-eggs", 0xF39C12, []string{"Action", "Adventure", "Fantasy"}, []string{"Tạp kỹ Helikopter|https://truyen.moe/team/117/tap-ky-helikopter"}},
 	}
 	for _, it := range items {
 		b, _ := json.Marshal(preview(it.source, it.title, it.desc, it.url, cover, it.color, it.genres, it.collabs))
