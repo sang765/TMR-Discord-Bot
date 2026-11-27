@@ -49,6 +49,9 @@ type TranslationTeam struct {
 // Fetcher is implemented by each source.
 type Fetcher interface {
 	Name() string
+	// SeedKey định danh riêng cho từng ID nhóm (vd "moe:/team/74/...", "md:9759...").
+	// Dùng để auto-seed nhóm mới khi thêm vào config — tránh flood thông báo cũ.
+	SeedKey() string
 	// Fetch returns items that are new relative to the store.
 	// In seed mode it only records the current state and returns nothing,
 	// so the bot does not spam old chapters on its first run.

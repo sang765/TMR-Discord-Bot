@@ -26,24 +26,26 @@ type PostedEntry struct {
 }
 
 type state struct {
-	Seen      map[string]time.Time   `json:"seen"`
-	Announced map[string]time.Time   `json:"announced"`
-	Posted    map[string]PostedEntry `json:"posted"`
-	LastErr   map[string]time.Time   `json:"last_error_post"`
-	LastPoll  map[string]time.Time   `json:"last_poll"`
-	SeedFails map[string]int         `json:"seed_fails"`
-	Seeded    bool                   `json:"seeded"`
+	Seen         map[string]time.Time   `json:"seen"`
+	Announced    map[string]time.Time   `json:"announced"`
+	Posted       map[string]PostedEntry `json:"posted"`
+	LastErr      map[string]time.Time   `json:"last_error_post"`
+	LastPoll     map[string]time.Time   `json:"last_poll"`
+	SeedFails    map[string]int         `json:"seed_fails"`
+	Seeded       bool                   `json:"seeded"`
+	SeededGroups map[string]bool        `json:"seeded_groups"`
 }
 
 // Open loads the store from path (creating parent dirs).
 func Open(path string) (*Store, error) {
 	s := &Store{st: state{
-		Seen:      map[string]time.Time{},
-		Announced: map[string]time.Time{},
-		Posted:    map[string]PostedEntry{},
-		LastErr:   map[string]time.Time{},
-		LastPoll:  map[string]time.Time{},
-		SeedFails: map[string]int{},
+		Seen:         map[string]time.Time{},
+		Announced:    map[string]time.Time{},
+		Posted:       map[string]PostedEntry{},
+		LastErr:      map[string]time.Time{},
+		LastPoll:     map[string]time.Time{},
+		SeedFails:    map[string]int{},
+		SeededGroups: map[string]bool{},
 	}}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -80,6 +82,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.st.SeedFails == nil {
 		s.st.SeedFails = map[string]int{}
+	}
+	if s.st.SeededGroups == nil {
+		s.st.SeededGroups = map[string]bool{}
 	}
 	return s, nil
 }
@@ -224,4 +229,18 @@ func (s *Store) CountSeen() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.st.Seen)
+}
+
+// IsGroupSeeded reports whether a fetcher's SeedKey has been baseline-seeded.
+func (s *Store) IsGroupSeeded(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.st.SeededGroups[key]
+}
+
+// MarkGroupSeeded records that the group's baseline was recorded.
+func (s *Store) MarkGroupSeeded(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.st.SeededGroups[key] = true
 }

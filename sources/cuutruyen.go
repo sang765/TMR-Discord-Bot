@@ -19,6 +19,8 @@ type CuuTruyen struct {
 
 func (c *CuuTruyen) Name() string { return "Cứu Truyện" }
 
+func (c *CuuTruyen) SeedKey() string { return "ct:" + c.TeamID }
+
 type ctItem struct {
 	mangaID   string
 	mangaURL  string

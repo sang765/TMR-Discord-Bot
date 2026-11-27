@@ -402,9 +402,37 @@ func (a *app) fetchAll(seed bool) []pollResult {
 	return out
 }
 
+// autoSeedNewGroups nạp nền riêng cho nhóm mới thêm vào config, không phát thông báo.
+func (a *app) autoSeedNewGroups() {
+	changed := false
+	for _, f := range a.currentFetchers() {
+		key := ""
+		if sf, ok := f.(interface{ SeedKey() string }); ok {
+			key = sf.SeedKey()
+		}
+		if key == "" || a.st.IsGroupSeeded(key) {
+			continue
+		}
+		if _, err := f.Fetch(true); err != nil {
+			log.Printf("auto-seed %s thất bại (sẽ thử poll sau): %v", key, err)
+			continue
+		}
+		a.st.MarkGroupSeeded(key)
+		changed = true
+		log.Printf("auto-seed %s xong — nạp nền, không báo mục cũ", key)
+	}
+	if changed {
+		_ = a.st.Save("data/state.json")
+	}
+}
+
 func (a *app) poll() error {
 	start := time.Now()
 	defer a.recoverSkippedSeeds()
+
+	// Auto-seed nhóm mới (xem autoSeedNewGroups).
+	a.autoSeedNewGroups()
+
 	results := a.fetchAll(false)
 
 	var all []sources.Item

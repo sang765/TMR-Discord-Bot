@@ -18,6 +18,8 @@ type MangaDex struct {
 
 func (m *MangaDex) Name() string { return "MangaDex" }
 
+func (m *MangaDex) SeedKey() string { return "md:" + m.GroupID }
+
 type mdChapter struct {
 	ID         string `json:"id"`
 	Attributes struct {

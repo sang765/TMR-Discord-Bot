@@ -28,6 +28,8 @@ type DocLn struct {
 
 func (d *DocLn) Name() string { return "DocLn" }
 
+func (d *DocLn) SeedKey() string { return "docln:" + d.GroupID }
+
 type doclnSeries struct {
 	ID         string
 	URL        string

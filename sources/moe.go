@@ -17,6 +17,8 @@ type Moe struct {
 
 func (m *Moe) Name() string { return "Mòe Truyện" }
 
+func (m *Moe) SeedKey() string { return "moe:" + m.TeamPath }
+
 var moeItemRe = regexp.MustCompile(
 	`(?s)<a class="team-update-item[^"]*" href="(/manga/[^"]+?/chapters/\d+)">\s*` +
 		`<span class="team-update-item__main">\s*<strong>([^<]+)</strong>\s*<span>([^<]*)</span>\s*</span>\s*` +
