@@ -189,7 +189,7 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 			}
 			meta := metaOf(it.mangaPath)
 			items = append(items, Item{
-				Source: "moe", Kind: KindNewSeries,
+				Source: "moe", Team: TeamName(m.TeamPath), Kind: KindNewSeries,
 				Title:       it.title,
 				URL:         AbsoluteURL(m.Base, it.mangaPath),
 				CoverURL:    meta.Cover,
@@ -219,7 +219,7 @@ func (m *Moe) Fetch(seed bool) ([]Item, error) {
 		}
 		emitted[chapKey] = true
 		items = append(items, Item{
-			Source: "moe", Kind: KindChapter,
+			Source: "moe", Team: TeamName(m.TeamPath), Kind: KindChapter,
 			Title: it.title, Chapter: label,
 			URL:       AbsoluteURL(m.Base, it.chapPath),
 			CoverURL:  metaOf(it.mangaPath).Cover,

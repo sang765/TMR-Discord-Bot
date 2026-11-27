@@ -197,7 +197,7 @@ func (c *CuuTruyen) Fetch(seed bool) ([]Item, error) {
 				continue
 			}
 			items = append(items, Item{
-				Source: "cuutruyen", Kind: KindNewSeries,
+				Source: "cuutruyen", Team: TeamName(c.TeamID), Kind: KindNewSeries,
 				Title: it.title, URL: it.mangaURL,
 				CoverURL:  it.cover,
 				Chapter:   chLabel,
@@ -213,7 +213,7 @@ func (c *CuuTruyen) Fetch(seed bool) ([]Item, error) {
 			continue
 		}
 		items = append(items, Item{
-			Source: "cuutruyen", Kind: KindChapter,
+			Source: "cuutruyen", Team: TeamName(c.TeamID), Kind: KindChapter,
 			Title: it.title, Chapter: chLabel, URL: it.chapURL,
 			CoverURL:  it.cover,
 			Published: pub,

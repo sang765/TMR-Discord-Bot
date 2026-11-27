@@ -24,6 +24,7 @@ const (
 // Item is one scraped update from any source.
 type Item struct {
 	Source   string // "docln", "mangadex", "moe", "cuutruyen"
+	Team     string // tên nhóm dịch (vd "The Mavericks", "Exist In This World") — cho footer
 	Kind     Kind
 	Title    string // series title
 	Chapter  string // chapter label e.g. "Chương 58" / "Ch. 5" (empty for new series)
@@ -33,7 +34,7 @@ type Item struct {
 
 	// New-series card: mô tả bộ truyện + các nhóm dịch cùng làm (collab).
 	Description string            `json:"description,omitempty"`
-	Genres      []string          `json:"genres,omitempty"` // thể loại / tag
+	Genres      []string          `json:"genres,omitempty"`  // thể loại / tag
 	Collabs     []TranslationTeam `json:"collabs,omitempty"` // không tính nhóm mình
 
 	Published time.Time

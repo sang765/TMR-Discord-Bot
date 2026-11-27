@@ -698,9 +698,13 @@ func buildMessage(roleID string, it sources.Item) discord.Message {
 func footerLine(src string, it sources.Item) string {
 	sep := " • "
 	if it.Kind == sources.KindNewSeries {
-		sep = " | " // mẫu mới: The Mavericks | timestamp
+		sep = " | " // mẫu mới: {nhóm} | {nguồn} | timestamp
 	}
-	line := "-# The Mavericks" + sep + src
+	team := it.Team
+	if team == "" {
+		team = "The Mavericks" // fallback cho item cũ / nguồn không có team
+	}
+	line := "-# " + team + sep + src
 	if !it.Published.IsZero() {
 		line += sep + it.Published.In(tzVN).Format("02/01 15:04")
 	}

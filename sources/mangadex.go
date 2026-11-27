@@ -204,7 +204,7 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 			m.Store.Mark(chKey, now)
 			if !seed {
 				items = append(items, Item{
-					Source: "mangadex", Kind: KindNewSeries,
+					Source: "mangadex", Team: TeamName(m.GroupID), Kind: KindNewSeries,
 					Title: title, URL: "https://mangadex.org/title/" + mangaID,
 					CoverURL:    cover,
 					Chapter:     chLabel,
@@ -224,7 +224,7 @@ func (m *MangaDex) Fetch(seed bool) ([]Item, error) {
 			continue
 		}
 		items = append(items, Item{
-			Source: "mangadex", Kind: KindChapter,
+			Source: "mangadex", Team: TeamName(m.GroupID), Kind: KindChapter,
 			Title: title, Chapter: chLabel, URL: chURL,
 			CoverURL:  cover,
 			Published: ch.Attributes.ReadableAt,

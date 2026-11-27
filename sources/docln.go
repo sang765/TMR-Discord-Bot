@@ -228,7 +228,7 @@ func (d *DocLn) Fetch(seed bool) ([]Item, error) {
 		if !seenSeries {
 			if !seed {
 				items = append(items, Item{
-					Source: "docln", Kind: KindNewSeries,
+					Source: "docln", Team: TeamName(d.GroupID), Kind: KindNewSeries,
 					Title: s.Title, URL: s.URL,
 					CoverURL: cover,
 					Subtitle: Truncate(desc, 250),
@@ -258,7 +258,7 @@ func (d *DocLn) Fetch(seed bool) ([]Item, error) {
 				continue
 			}
 			items = append(items, Item{
-				Source: "docln", Kind: KindChapter,
+				Source: "docln", Team: TeamName(d.GroupID), Kind: KindChapter,
 				Title: s.Title, Chapter: c.Label, URL: c.URL,
 				CoverURL:  cover,
 				Published: c.Date,
