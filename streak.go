@@ -30,14 +30,14 @@ func (a *app) streakBackfillTicker(dry bool) {
 // runStreakCheck thực hiện 1 lần quét + gán role.
 // dry=true: chỉ log, không gán role, không gửi thông báo.
 func (a *app) runStreakCheck(dry bool) {
-	if !a.cfg.Streak.Enabled || a.cfg.Streak.RoleID == "" {
+	if !a.currentCfg().Streak.Enabled || a.currentCfg().Streak.RoleID == "" {
 		return
 	}
-	need := a.cfg.Streak.Days
+	need := a.currentCfg().Streak.Days
 	if need <= 0 {
 		need = 3
 	}
-	backfill := a.cfg.Streak.BackfillDays
+	backfill := a.currentCfg().Streak.BackfillDays
 	if backfill <= 0 {
 		backfill = 7
 	}
@@ -54,10 +54,10 @@ func (a *app) runStreakCheck(dry bool) {
 	}
 
 	excluded := map[string]bool{}
-	for _, id := range a.cfg.Streak.Exclude {
+	for _, id := range a.currentCfg().Streak.Exclude {
 		excluded[id] = true
 	}
-	channels, err := a.dc.ListGuildChannels(a.cfg.GuildID)
+	channels, err := a.dc.ListGuildChannels(a.currentCfg().GuildID)
 	if err != nil {
 		log.Printf("streak: list channels: %v", err)
 		return
@@ -106,22 +106,22 @@ func (a *app) runStreakCheck(dry bool) {
 			continue
 		}
 		if dry {
-			log.Printf("streak: [dry] cấp role %s cho user %s (chuỗi %d ngày)", a.cfg.Streak.RoleID, userID, need)
+			log.Printf("streak: [dry] cấp role %s cho user %s (chuỗi %d ngày)", a.currentCfg().Streak.RoleID, userID, need)
 			continue
 		}
 		username := a.dc.GetUsername(userID)
 		reason := fmt.Sprintf("Người dùng %s đã đạt chuỗi %d ngày liên tục. Đã cấp quyền Attach File và Embed Link.", username, need)
-		if err := a.dc.AddRole(a.cfg.GuildID, userID, a.cfg.Streak.RoleID, reason); err != nil {
+		if err := a.dc.AddRole(a.currentCfg().GuildID, userID, a.currentCfg().Streak.RoleID, reason); err != nil {
 			log.Printf("streak: gán role cho %s thất bại: %v", userID, err)
 			continue
 		}
 		st.MarkAwarded(userID)
 		granted++
 
-		if a.cfg.Streak.Announce {
-			ch := a.cfg.Streak.AnnounceCh
+		if a.currentCfg().Streak.Announce {
+			ch := a.currentCfg().Streak.AnnounceCh
 			if ch == "" {
-				ch = a.cfg.Channels.Status
+				ch = a.currentCfg().Channels.Status
 			}
 			if ch != "" {
 				msg := "🎉 <@" + userID + "> đã chat chuỗi " + itoa(need) + " ngày liên tục — nhận role **Con Dân Tích Cực**!"

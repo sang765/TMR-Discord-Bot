@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -67,8 +68,13 @@ func main() {
 	dc := discord.New(cfg.DiscordToken)
 
 	app := &app{
-		cfg: cfg, st: st, dc: dc, dry: *dry,
+		st: st, dc: dc, dry: *dry,
 		fetchers: buildFetchers(cfg),
+		cfgPath:  *cfgPath,
+	}
+	app.cfg.Store(cfg)
+	if st, err := os.Stat(*cfgPath); err == nil {
+		app.cfgMtime = st.ModTime()
 	}
 
 	if *streakOnly {
@@ -182,12 +188,53 @@ func (sharedStore) SeenAt(k string) (time.Time, bool) { return globalStore.SeenA
 func (sharedStore) Mark(k string, t time.Time)        { globalStore.Mark(k, t) }
 
 type app struct {
-	cfg      *Config
-	st       *store.Store
-	dc       *discord.Client
-	dry      bool
-	drySeq   int
-	fetchers []sources.Fetcher
+	cfg    atomic.Pointer[Config] // hot-reload an toàn (không data race)
+	st     *store.Store
+	dc     *discord.Client
+	dry    bool
+	drySeq int
+
+	// Hot-reload config: mỗi poll kiểm tra mtime file; nếu đổi thì load lại
+	// + rebuild fetchers, không cần restart bot.
+	fetchersMu sync.RWMutex
+	fetchers   []sources.Fetcher
+	cfgPath    string
+	cfgMtime   time.Time
+}
+
+// maybeReloadConfig kiểm tra mtime config.yml; nếu đổi thì load lại config,
+// rebuild fetchers và cập nhật mtime. Chỉ reload cấu hình scrape/đích gửi —
+// không đụng token/gateway đang chạy. An toàn vì cfg là atomic.Pointer.
+func (a *app) maybeReloadConfig() {
+	if a.cfgPath == "" {
+		return
+	}
+	st, err := os.Stat(a.cfgPath)
+	if err != nil || !st.ModTime().After(a.cfgMtime) {
+		return
+	}
+	cfg, err := LoadConfig(a.cfgPath)
+	if err != nil {
+		log.Printf("reload config thất bại (giữ config cũ): %v", err)
+		return
+	}
+	newFetchers := buildFetchers(cfg)
+	a.fetchersMu.Lock()
+	a.fetchers = newFetchers
+	a.cfgMtime = st.ModTime()
+	a.fetchersMu.Unlock()
+	a.cfg.Store(cfg)
+	log.Printf("config changed — reloaded %d fetchers, poll mỗi %d phút", len(newFetchers), cfg.PollIntervalMin)
+}
+
+// currentCfg trả về config hiện tại (atomic load).
+func (a *app) currentCfg() *Config { return a.cfg.Load() }
+
+// currentFetchers trả về slice fetcher hiện tại (đọc an toàn).
+func (a *app) currentFetchers() []sources.Fetcher {
+	a.fetchersMu.RLock()
+	defer a.fetchersMu.RUnlock()
+	return a.fetchers
 }
 
 type pollResult struct {
@@ -201,7 +248,7 @@ func (a *app) run(once, forceSeed bool) error {
 
 	seedMode := forceSeed || !a.st.Seeded()
 
-	log.Printf("tmr-bot %s — %d nguồn, poll mỗi %d phút", version, len(a.fetchers), a.cfg.PollIntervalMin)
+	log.Printf("tmr-bot %s — %d nguồn, poll mỗi %d phút", version, len(a.fetchers), a.currentCfg().PollIntervalMin)
 
 	if seedMode {
 		if serr := a.seed(); serr != nil {
@@ -212,15 +259,15 @@ func (a *app) run(once, forceSeed bool) error {
 			_ = a.st.Save("data/state.json")
 			return nil
 		}
-	} else if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
+	} else if a.currentCfg().StatusNotices && !a.dry && a.currentCfg().Channels.Status != "" {
 		msg := fmt.Sprintf("🤖 **TMR Bot online** (v%s) — poll mỗi %d phút. Theo dõi: %s.",
-			version, a.cfg.PollIntervalMin, a.sourceList())
-		if _, err := a.dc.SendMessage(a.cfg.Channels.Status, discord.Message{Content: msg}); err != nil {
+			version, a.currentCfg().PollIntervalMin, a.sourceList())
+		if _, err := a.dc.SendMessage(a.currentCfg().Channels.Status, discord.Message{Content: msg}); err != nil {
 			log.Printf("không gửi được thông báo khởi động: %v", err)
 		}
 	}
 
-	interval := time.Duration(a.cfg.PollIntervalMin) * time.Minute
+	interval := time.Duration(a.currentCfg().PollIntervalMin) * time.Minute
 	if interval < time.Minute {
 		interval = time.Minute
 	}
@@ -256,6 +303,17 @@ func (a *app) run(once, forceSeed bool) error {
 			_ = a.st.Save("data/state.json")
 			return nil
 		case <-ticker.C:
+			// Hot-reload: nếu config.yml đổi thì nạp lại trước khi poll.
+			a.maybeReloadConfig()
+			newInterval := time.Duration(a.currentCfg().PollIntervalMin) * time.Minute
+			if newInterval < time.Minute {
+				newInterval = time.Minute
+			}
+			if newInterval != interval {
+				ticker.Reset(newInterval)
+				interval = newInterval
+				log.Printf("poll interval đổi thành %s", interval)
+			}
 			if !a.st.Seeded() {
 				// seed lần trước lỗi (nguồn bị chặn...) -> thử lại, xong thì poll luôn
 				if serr := a.seed(); serr != nil {
@@ -271,7 +329,7 @@ func (a *app) run(once, forceSeed bool) error {
 
 func (a *app) sourceList() string {
 	var names []string
-	for _, f := range a.fetchers {
+	for _, f := range a.currentFetchers() {
 		names = append(names, f.Name())
 	}
 	return strings.Join(names, ", ")
@@ -316,12 +374,12 @@ func (a *app) seed() error {
 	}
 	log.Printf("seed xong: %d mục đã biết, bot bắt đầu theo dõi từ bây giờ", a.st.CountSeen())
 
-	if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
+	if a.currentCfg().StatusNotices && !a.dry && a.currentCfg().Channels.Status != "" {
 		msg := fmt.Sprintf("📦 **TMR Bot** (v%s) đã nạp dữ liệu nền lần đầu (%d mục đã biết). Từ giờ chỉ thông báo mục mới thôi!", version, a.st.CountSeen())
 		if len(skipped) > 0 {
 			msg += fmt.Sprintf("\n⚠️ Không seed được nguồn: **%s** (bị chặn) — bot vẫn chạy với các nguồn còn lại.", strings.Join(skipped, ", "))
 		}
-		if _, err := a.dc.SendMessage(a.cfg.Channels.Status, discord.Message{Content: msg}); err != nil {
+		if _, err := a.dc.SendMessage(a.currentCfg().Channels.Status, discord.Message{Content: msg}); err != nil {
 			log.Printf("không gửi được thông báo seed: %v", err)
 		}
 	}
@@ -330,8 +388,9 @@ func (a *app) seed() error {
 
 func (a *app) fetchAll(seed bool) []pollResult {
 	var wg sync.WaitGroup
-	out := make([]pollResult, len(a.fetchers))
-	for i, f := range a.fetchers {
+	fetchers := a.currentFetchers()
+	out := make([]pollResult, len(fetchers))
+	for i, f := range fetchers {
 		wg.Add(1)
 		go func(i int, f sources.Fetcher) {
 			defer wg.Done()
@@ -366,7 +425,7 @@ func (a *app) poll() error {
 
 	sent := 0
 	for _, it := range all {
-		if a.cfg.Debug {
+		if a.currentCfg().Debug {
 			log.Printf("  [%s] %s | %s | %s | pub=%s",
 				it.Source, it.Title, it.Chapter, it.URL, it.Published.Format("02/01 15:04"))
 		}
@@ -388,7 +447,7 @@ func (a *app) poll() error {
 // ở các poll sau vẫn phải "học nền" trước khi được phép thông báo — nếu không wiping
 // state để nó tự seed sẽ flood toàn bộ chapter cũ ngay khi CF thả.
 func (a *app) recoverSkippedSeeds() {
-	for _, f := range a.fetchers {
+	for _, f := range a.currentFetchers() {
 		if a.st.SeedFailCount(f.Name()) == 0 {
 			continue
 		}
@@ -400,19 +459,19 @@ func (a *app) recoverSkippedSeeds() {
 		a.st.ResetSeedFail(f.Name())
 		_ = a.st.Save("data/state.json")
 		log.Printf("nguồn %s đã hồi phục — đã nạp nền, bắt đầu thông báo từ giờ", f.Name())
-		if a.cfg.StatusNotices && !a.dry && a.cfg.Channels.Status != "" {
+		if a.currentCfg().StatusNotices && !a.dry && a.currentCfg().Channels.Status != "" {
 			msg := fmt.Sprintf("✅ Nguồn **%s** đã truy cập lại được — đã nạp dữ liệu nền, bắt đầu thông báo mục mới.", f.Name())
-			_, _ = a.dc.SendMessage(a.cfg.Channels.Status, discord.Message{Content: msg})
+			_, _ = a.dc.SendMessage(a.currentCfg().Channels.Status, discord.Message{Content: msg})
 		}
 	}
 }
 
 func (a *app) maybeReportError(source string, err error) {
-	if a.dry || a.cfg.Channels.Status == "" || !a.st.CanPostError(source) {
+	if a.dry || a.currentCfg().Channels.Status == "" || !a.st.CanPostError(source) {
 		return
 	}
 	msg := fmt.Sprintf("⚠️ Nguồn **%s** poll lỗi: `%v`. Sẽ thử lại ở lần poll sau.", source, err)
-	if _, e := a.dc.SendMessage(a.cfg.Channels.Status, discord.Message{Content: msg}); e != nil {
+	if _, e := a.dc.SendMessage(a.currentCfg().Channels.Status, discord.Message{Content: msg}); e != nil {
 		log.Printf("không gửi được báo lỗi: %v", e)
 	}
 }
@@ -421,7 +480,7 @@ func (a *app) maybeReportError(source string, err error) {
 // Khi merge_links bật: nếu truyện+chap này đã được thông báo từ nguồn khác,
 // bot EDIT tin nhắn cũ để gắn thêm link nguồn mới (kiểu "cuu - mgd - moe - fb").
 func (a *app) announce(it sources.Item) error {
-	cutoff := time.Now().Add(-time.Duration(a.cfg.MaxAgeHours) * time.Hour)
+	cutoff := time.Now().Add(-time.Duration(a.currentCfg().MaxAgeHours) * time.Hour)
 	if !it.Published.IsZero() && it.Published.Before(cutoff) {
 		return nil // quá cũ, bỏ qua
 	}
@@ -434,30 +493,30 @@ func (a *app) announce(it sources.Item) error {
 	var channelID string
 	switch {
 	case it.Source == "docln" && it.Kind == sources.KindChapter:
-		channelID = a.cfg.Channels.NovelChap
+		channelID = a.currentCfg().Channels.NovelChap
 	case it.Source == "docln":
-		channelID = a.cfg.Channels.NovelNew
+		channelID = a.currentCfg().Channels.NovelNew
 	case it.Kind == sources.KindChapter:
-		channelID = a.cfg.Channels.MangaChap
+		channelID = a.currentCfg().Channels.MangaChap
 	default:
-		channelID = a.cfg.Channels.MangaNew
+		channelID = a.currentCfg().Channels.MangaNew
 	}
 	if channelID == "" {
 		return fmt.Errorf("chưa cấu hình kênh cho %s/%v", it.Source, it.Kind)
 	}
 
-	msg := buildMessage(a.cfg.RoleID, it)
+	msg := buildMessage(a.currentCfg().RoleID, it)
 	srcName := sourceNames[it.Source]
 
-	if a.cfg.MergeLinks {
+	if a.currentCfg().MergeLinks {
 		if entry, ok := a.st.GetPosted(dedupKey); ok {
 			return a.mergeInto(entry, dedupKey, srcName, it.URL, it.Title, it.Chapter)
 		}
 	}
 
 	// legacy dedup (khi merge_links = false)
-	if !a.cfg.MergeLinks {
-		if a.st.AnnouncedWithin(dedupKey, time.Duration(a.cfg.DedupHours)*time.Hour) {
+	if !a.currentCfg().MergeLinks {
+		if a.st.AnnouncedWithin(dedupKey, time.Duration(a.currentCfg().DedupHours)*time.Hour) {
 			log.Printf("  bỏ qua (trùng nguồn khác): %s %s", it.Title, it.Chapter)
 			return nil
 		}

@@ -37,15 +37,15 @@ type RealtimeMessage struct {
 const gatewayIntents = 0
 
 func (a *app) runGateway() {
-	token := a.cfg.DiscordToken
-	if token == "" || !a.cfg.Streak.Enabled {
+	token := a.currentCfg().DiscordToken
+	if token == "" || !a.currentCfg().Streak.Enabled {
 		return
 	}
 	exclude := map[string]bool{}
-	for _, id := range a.cfg.Streak.Exclude {
+	for _, id := range a.currentCfg().Streak.Exclude {
 		exclude[id] = true
 	}
-	need := a.cfg.Streak.Days
+	need := a.currentCfg().Streak.Days
 	if need <= 0 {
 		need = 3
 	}
@@ -56,7 +56,7 @@ func (a *app) runGateway() {
 	}
 	// lấy danh sách kênh text hợp lệ (có thể lỗi → fallback chấp nhận mọi channel)
 	valid := map[string]bool{}
-	if chans, err := a.dc.ListGuildChannels(a.cfg.GuildID); err == nil {
+	if chans, err := a.dc.ListGuildChannels(a.currentCfg().GuildID); err == nil {
 		for _, ch := range chans {
 			if !ch.NSFW && !exclude[ch.ID] {
 				valid[ch.ID] = true
@@ -185,7 +185,7 @@ func (a *app) gatewaySession(token string, need int, st *store.StreakStore, vali
 					if err := json.Unmarshal(ev.D, &m); err != nil {
 						continue
 					}
-					if m.Author.Bot || m.Author.ID == "" || m.GuildID != a.cfg.GuildID {
+					if m.Author.Bot || m.Author.ID == "" || m.GuildID != a.currentCfg().GuildID {
 						continue
 					}
 					if len(valid) > 0 && !valid[m.ChannelID] {
@@ -227,24 +227,24 @@ func (a *app) grantRole(st *store.StreakStore, userID, username string) {
 	if username == "" {
 		username = a.dc.GetUsername(userID)
 	}
-	reason := fmt.Sprintf("Người dùng %s đã đạt chuỗi %d ngày liên tục. Đã cấp quyền Attach File và Embed Link.", username, a.cfg.Streak.Days)
+	reason := fmt.Sprintf("Người dùng %s đã đạt chuỗi %d ngày liên tục. Đã cấp quyền Attach File và Embed Link.", username, a.currentCfg().Streak.Days)
 	if a.dry {
 		log.Printf("gateway: [dry] cấp role cho %s — reason: %s", userID, reason)
 		return
 	}
-	if err := a.dc.AddRole(a.cfg.GuildID, userID, a.cfg.Streak.RoleID, reason); err != nil {
+	if err := a.dc.AddRole(a.currentCfg().GuildID, userID, a.currentCfg().Streak.RoleID, reason); err != nil {
 		log.Printf("gateway: gán role cho %s: %v", userID, err)
 		return
 	}
 	st.MarkAwarded(userID)
 	log.Printf("gateway: đã cấp role Con Dân Tích Cực cho user %s", userID)
-	if a.cfg.Streak.Announce {
-		ch := a.cfg.Streak.AnnounceCh
+	if a.currentCfg().Streak.Announce {
+		ch := a.currentCfg().Streak.AnnounceCh
 		if ch == "" {
-			ch = a.cfg.Channels.Status
+			ch = a.currentCfg().Channels.Status
 		}
 		if ch != "" {
-			msg := "🎉 <@" + userID + "> đã chat chuỗi " + itoa(a.cfg.Streak.Days) + " ngày liên tục — nhận role **Con Dân Tích Cực**!"
+			msg := "🎉 <@" + userID + "> đã chat chuỗi " + itoa(a.currentCfg().Streak.Days) + " ngày liên tục — nhận role **Con Dân Tích Cực**!"
 			if _, err := a.dc.SendMessage(ch, discord.Message{Content: msg}); err != nil {
 				log.Printf("gateway: báo role: %v", err)
 			}
