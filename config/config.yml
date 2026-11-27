@@ -44,6 +44,7 @@ moe_team_paths:
 cuutruyen_base: "https://cuutruyen.net"  # đổi thành mirror nếu bị chặn
 cuutruyen_team_ids:
   - "+695"
+  - "+313"   # Exists in this world
 cuutruyen_jina: false              # true = luôn lấy qua r.jina.ai
 
 # Bot báo online/lỗi vào kênh status

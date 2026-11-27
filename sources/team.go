@@ -11,6 +11,7 @@ func TeamName(id string) string {
 	known := map[string]string{
 		"3474":                                 "The Mavericks",
 		"+695":                                 "The Mavericks",
+		"+313":                                 "Exist In This World", // "Exits in this world" trên CT (typo)
 		"256":                                  "The Mavericks",
 		"1a653584-126f-4775-9af8-e06e250ad829": "The Mavericks",
 		"9759e8b8-c76a-4d1e-b672-c88e9d5f67e6": "Exist In This World",
